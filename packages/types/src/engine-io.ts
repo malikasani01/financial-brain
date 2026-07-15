@@ -188,6 +188,45 @@ export interface GoalFeasibilityResult {
   shortfallCents: Cents;
 }
 
+// ---- Freedom plan & business scenarios (spec §33) --------------------------
+
+export interface FreedomResult {
+  /** The monthly net income needed to replace employment. */
+  freedomNumberCents: Cents;
+  currentBusinessIncomeCents: Cents;
+  /** freedomNumber - currentBusinessIncome, floored at 0. */
+  freedomGapCents: Cents;
+}
+
+export interface BusinessScenarioInput {
+  id: string;
+  label: string | null;
+  /** Exactly one price is normally set; monthly wins, then weekly, then annual. */
+  weeklyPriceCents: Cents | null;
+  monthlyPriceCents: Cents | null;
+  annualPriceCents: Cents | null;
+  payingUsers: number;
+  variableCostPerUserCents: Cents;
+  fixedMonthlyCents: Cents;
+}
+
+export interface BusinessScenarioResult {
+  id: string;
+  label: string | null;
+  /** Effective monthly price per user (non-monthly plans normalized). */
+  monthlyPricePerUserCents: Cents;
+  mrrCents: Cents;
+  arrCents: Cents;
+  /** MRR minus total variable cost. */
+  grossProfitCents: Cents;
+  /** Gross profit minus fixed monthly expenses. */
+  netOperatingProfitCents: Cents;
+  /** Paying users needed for net operating profit to cover the Freedom Number; null if unit economics can't. */
+  customersToFreedom: number | null;
+  /** Net operating profit as a percent of the Freedom Number (>=0). */
+  freedomCoveragePercent: number;
+}
+
 // ---- Aggregate output ------------------------------------------------------
 
 /** The canonical result persisted to forecast_snapshots and read by screens. */

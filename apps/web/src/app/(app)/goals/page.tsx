@@ -19,7 +19,12 @@ export default async function GoalsPage() {
 
   return (
     <main className="mx-auto max-w-md px-6 py-10">
-      <h1 className="text-2xl font-semibold text-forest">Goals</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-forest">Goals</h1>
+        <Link href="/freedom" className="text-sm text-forest underline underline-offset-4">
+          My Freedom Plan
+        </Link>
+      </div>
 
       {input.goals.length === 0 ? (
         <p className="mt-6 text-muted">

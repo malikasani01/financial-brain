@@ -21,5 +21,12 @@ export { simulatePurchaseDecision, purchaseToEvents } from './purchase.js';
 export { calculateGoalFeasibility } from './goal.js';
 export { maxAffordable } from './max-affordable.js';
 
+// Freedom & business scenarios
+export {
+  calculateFreedom,
+  calculateBusinessScenario,
+  effectiveMonthlyPriceCents,
+} from './business.js';
+
 // Aggregate
 export { computeEngineOutput } from './pipeline.js';

@@ -133,6 +133,84 @@ export async function saveFreedom(fd: FormData): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
+// ---- Freedom Plan & business scenarios -------------------------------------
+
+/** Upsert the freedom plan and (optionally) the current business income. */
+export async function saveFreedomPlan(fd: FormData): Promise<void> {
+  const { supabase, userId } = await getSessionContext();
+  const { error } = await supabase.from('freedom_plans').upsert({
+    user_id: userId,
+    monthly_employment_net_cents: dollarsToCentsOrNull(fd.get('employment_net')),
+    desired_replacement_cents: dollarsToCentsOrNull(fd.get('desired_replacement')),
+    target_date: textOrNull(fd.get('target_date')),
+  });
+  if (error) throw new Error(error.message);
+
+  const businessRevenue = dollarsToCentsOrNull(fd.get('business_revenue'));
+  if (businessRevenue != null) {
+    const businessId = await ensureBusiness(supabase, userId);
+    await supabase
+      .from('businesses')
+      .update({ monthly_revenue_cents: businessRevenue })
+      .eq('id', businessId)
+      .eq('user_id', userId);
+  }
+  revalidatePath('/freedom');
+}
+
+async function ensureBusiness(
+  supabase: Awaited<ReturnType<typeof getSessionContext>>['supabase'],
+  userId: string,
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('user_id', userId)
+    .is('archived_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data, error } = await supabase
+    .from('businesses')
+    .insert({ user_id: userId, name: 'Saylo', monthly_revenue_cents: 0, monthly_opex_cents: 0 })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+/** Add a what-if business scenario (one billing period per scenario). */
+export async function addBusinessScenario(fd: FormData): Promise<void> {
+  const { supabase, userId } = await getSessionContext();
+  const businessId = await ensureBusiness(supabase, userId);
+
+  const period = String(fd.get('price_period') ?? 'monthly');
+  const priceCents = dollarsToCentsOrNull(fd.get('price'));
+
+  const { error } = await supabase.from('business_scenarios').insert({
+    user_id: userId,
+    business_id: businessId,
+    label: textOrNull(fd.get('label')),
+    weekly_price_cents: period === 'weekly' ? priceCents : null,
+    monthly_price_cents: period === 'monthly' ? priceCents : null,
+    annual_price_cents: period === 'annual' ? priceCents : null,
+    paying_users: Number(fd.get('paying_users')) || 0,
+    variable_cost_per_user_cents: dollarsToCents(fd.get('variable_cost')),
+    fixed_monthly_cents: dollarsToCents(fd.get('fixed_monthly')),
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath('/freedom');
+}
+
+/** Scenarios are speculative models, not financial records — hard delete is fine. */
+export async function deleteScenario(id: string): Promise<void> {
+  const { supabase, userId } = await getSessionContext();
+  await supabase.from('business_scenarios').delete().eq('id', id).eq('user_id', userId);
+  revalidatePath('/freedom');
+}
+
 // ---- Balances & onboarding progress ---------------------------------------
 
 /** Quick multi-account balance update (§34), then recalc immediately. */

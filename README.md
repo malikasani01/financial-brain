@@ -109,6 +109,15 @@ DECIDES**:
 Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable it; without a key the Brain
 tells you it isn't connected yet rather than erroring.
 
+**Phase 5 complete** — the Freedom Plan (`/freedom`, linked from Goals):
+
+- **Freedom Number** = desired monthly replacement income; shows current business income
+  and the monthly Freedom Gap.
+- **Saylo business-scenario planner**: add pricing scenarios (weekly / monthly / annual),
+  and the engine computes MRR, ARR, gross & net operating profit, freedom-coverage %, and
+  the number of paying customers needed to reach the Freedom Number. All deterministic and
+  unit-tested; MVP intentionally excludes CAC/LTV/churn/conversion/cohorts.
+
 ### Known notes
 
 - Dev-tooling audit advisories (esbuild → vite → vitest chain) are **dev-only** and not in

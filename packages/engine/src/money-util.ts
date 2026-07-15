@@ -33,15 +33,12 @@ export function distributeByWeight(total: Cents, weights: number[]): Cents[] {
   if (n === 0) return [];
   const weightSum = weights.reduce((s, w) => s + w, 0);
   if (weightSum <= 0) {
-    // Degenerate: spread as evenly as possible.
+    // Degenerate: spread as evenly as possible. `remainder` is in [0, n),
+    // so handing one extra cent to the first `remainder` entries sums exactly.
     const base = Math.floor(total / n);
     const out = new Array<Cents>(n).fill(base);
-    let remainder = total - base * n;
-    for (let i = 0; i < n && remainder !== 0; i++) {
-      const step = remainder > 0 ? 1 : -1;
-      out[i] = (out[i] as number) + step;
-      remainder -= step;
-    }
+    const remainder = total - base * n;
+    for (let i = 0; i < remainder; i++) out[i] = (out[i] as number) + 1;
     return out;
   }
 

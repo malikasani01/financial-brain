@@ -39,6 +39,25 @@ export function addDays(date: ISODate, days: number): ISODate {
   return fromUTC(dt);
 }
 
+/** Days in a given month. `month` is 1-based (1 = January). */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Add whole months, clamping the day to the target month's length so the
+ * day-of-month is preserved where possible (Jan 31 + 1mo => Feb 28/29, not
+ * Mar 2/3). Adding a further month returns to the 31st where the month allows.
+ */
+export function addMonths(date: ISODate, months: number): ISODate {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const targetIndex = m - 1 + months; // 0-based month index from year y
+  const targetYear = y + Math.floor(targetIndex / 12);
+  const targetMonth = ((targetIndex % 12) + 12) % 12; // 0-based, non-negative
+  const day = Math.min(d, daysInMonth(targetYear, targetMonth + 1));
+  return fromUTC(new Date(Date.UTC(targetYear, targetMonth, day)));
+}
+
 /** Whole calendar days from `a` to `b`. Positive when `b` is after `a`. */
 export function daysBetween(a: ISODate, b: ISODate): number {
   const MS = 86_400_000;

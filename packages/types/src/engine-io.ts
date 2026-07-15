@@ -8,7 +8,13 @@
 
 import type { Cents, Clock, ISODate } from './money.js';
 import type { DecisionState, DecisionType, FinancialStage, GoalStatus, Purpose } from './enums.js';
-import type { CashEvent, FundingEvent, GoalInput, ObligationInput } from './domain.js';
+import type {
+  CashEvent,
+  FundingEvent,
+  GoalInput,
+  LifeCostInput,
+  ObligationInput,
+} from './domain.js';
 
 /** Fully-materialized input to the engine. No DB or framework types leak in. */
 export interface EngineInput {
@@ -17,16 +23,22 @@ export interface EngineInput {
   horizonDays: number;
   /** Sum of account balances minus active reservations. */
   liquidCashCents: Cents;
-  /** All cash movements over the horizon, already expanded & de-duplicated. */
+  /**
+   * All stage-INDEPENDENT cash movements, already expanded & de-duplicated:
+   * income, obligation outflows, subscriptions, committed goal contributions,
+   * and planned purchases. The `kind` field distinguishes them. Life costs are
+   * NOT here — see `lifeCosts`.
+   */
   events: CashEvent[];
+  /** Stage-dependent; the engine expands these per the resolved stage. */
+  lifeCosts: LifeCostInput[];
+  /** Rich obligation metadata for urgency, stage detection, and conflicts. */
   obligations: ObligationInput[];
   goals: GoalInput[];
   /** Confirmed funding events, ascending by date, for daily-flexibility math. */
   fundingEvents: FundingEvent[];
   /** User override for the safety buffer; null => use the recommendation. */
   bufferOverrideCents: Cents | null;
-  /** Sum of essential obligations + essential life costs, normalized to monthly. */
-  essentialMonthlyCostCents: Cents;
 }
 
 // ---- Forecast --------------------------------------------------------------

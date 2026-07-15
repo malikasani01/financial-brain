@@ -66,6 +66,13 @@ export interface ObligationInput {
   /** Derived from category via fixed lookup; feeds Goal Alignment component. */
   goalAlignmentKey: GoalAlignmentKey;
 
+  /**
+   * For category 'Business' only: the linked business's monthly revenue, used
+   * to interpolate essentiality (a revenue-generating tool ranks far higher
+   * than the same tool for a pre-revenue project). Null when not applicable.
+   */
+  businessMonthlyRevenueCents: Cents | null;
+
   /** Whether the immediate issue is resolved (used to filter "unresolved"). */
   resolved: boolean;
 }
@@ -81,6 +88,25 @@ export interface GoalInput {
   personalPriority: PersonalPriority;
   /** ONLY committed contributions reduce Safe to Spend (locked decision). */
   committedPerPaycheckCents: Cents;
+}
+
+/**
+ * Engine view of a normal-life-cost category. NOT pre-expanded into events:
+ * the engine expands it over the horizon AFTER the financial stage is known,
+ * because the stage decides whether the minimum or normal amount is used.
+ */
+export interface LifeCostInput {
+  id: string;
+  category: string;
+  frequency: Frequency;
+  minimumCents: Cents;
+  normalCents: Cents;
+  /** MIN | NORMAL | CUSTOM => explicit; STAGE_DEFAULT => decided by stage. */
+  planningMode: 'MIN' | 'NORMAL' | 'CUSTOM' | 'STAGE_DEFAULT';
+  customCents: Cents | null;
+  isEssential: boolean;
+  /** First occurrence used to anchor recurrence; defaults to clock.today. */
+  nextDate: ISODate | null;
 }
 
 /** A confirmed future funding event (paycheck, confirmed rent, confirmed refund). */

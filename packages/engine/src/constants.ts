@@ -34,6 +34,17 @@ export const DECISION = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Financial stage detection (spec §40). The spec describes these qualitatively;
+// these are the deterministic rules the engine applies. Documented for review.
+// ---------------------------------------------------------------------------
+export const STAGE = {
+  /** A negative projected day within this many days counts as "near-term". */
+  NEAR_TERM_DAYS: 30,
+  /** BUILDING_FREEDOM requires liquid reserve >= this many months of essentials. */
+  BUILDING_FREEDOM_RESERVE_MONTHS: 3,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Safety buffer defaults by stage (spec §41)
 // ---------------------------------------------------------------------------
 export const SAFETY_BUFFER = {

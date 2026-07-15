@@ -7,15 +7,8 @@
  * the app, never the raw database.
  */
 
-import type { Cents, EngineInput, EngineOutput } from '@fb/types';
-
-function usd(cents: Cents): string {
-  const sign = cents < 0 ? '-' : '';
-  return `${sign}$${(Math.abs(cents) / 100).toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
-}
+import type { EngineInput, EngineOutput } from '@fb/types';
+import { usd } from './money.js';
 
 export interface BrainContext {
   today: string;

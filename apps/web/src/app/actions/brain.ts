@@ -73,7 +73,7 @@ export async function askBrain(fd: FormData): Promise<void> {
   let answer: string;
   let contextJson: unknown;
   try {
-    const result = await askFinancialBrain({ question, context, history, apiKey });
+    const result = await askFinancialBrain({ question, context, input, history, apiKey });
     answer = result.text || "I couldn't put together an answer just now. Try rephrasing?";
     contextJson = result.contextJson;
   } catch (err) {

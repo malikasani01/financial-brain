@@ -75,12 +75,26 @@ enforces 100% branch coverage.
 
 ## Status
 
-**Phase 0 complete.** Foundations in place: monorepo, typed domain model, engine skeleton
-with the locked constants, pure/tested date & money primitives, full Supabase schema with
-RLS on all 25 tables, and a working Next.js + Supabase auth shell.
+**Phase 0 complete** — foundations: monorepo, typed domain model, Supabase schema + RLS,
+auth shell.
 
-**Phase 1 (next):** implement the nine engine functions behind a full test suite (golden
-fixtures, table-driven scoring, property-based invariants) before any product UI.
+**Phase 1 complete** — the deterministic engine: nine functions, 107 tests, 100% branch
+coverage, golden fixtures reproducing the spec's $183 / $629 examples.
+
+**Phase 2 complete** — the data layer and onboarding:
+
+- `@fb/data` normalization bridge (DB rows → `EngineInput`), unit-tested; repositories;
+  `recalculateFinancials` → snapshot persistence.
+- Server actions for all entity CRUD + quick balance update, each able to trigger recalc.
+- The 7-step onboarding wizard (accounts → income → obligations → life costs →
+  subscriptions → goals → freedom), autosaving each entry, resumable, ending in the
+  analyzing → Truth flow. Home reads the live snapshot.
+
+To try it end-to-end you must connect a Supabase project (see Setup) and apply the
+migrations; the app then runs the real engine over data you enter.
+
+**Phase 3 (next):** the daily product — Home dashboard, Today's Priority Plan, Paycheck
+Plan, Money Allocation, and the Ask-Before-I-Spend decision flow.
 
 ### Known notes
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { purchaseToEvents, simulatePurchaseDecision } from './purchase.js';
-import { evt, funding, makeInput, ob } from './test-fixtures.js';
+import { evt, funding, lifeCost, makeInput, ob } from './test-fixtures.js';
 
 const golden183 = makeInput({
   liquidCashCents: 284700,
@@ -20,6 +20,33 @@ describe('simulatePurchaseDecision — decision table', () => {
     expect(r.state).toBe('RED');
     expect(r.safeToSpendBeforeCents).toBe(18300);
     expect(r.tests.safeToSpend.passed).toBe(false);
+  });
+
+  it('REGRESSION: a purchase never raises Safe to Spend (stage/buffer held fixed)', () => {
+    // A large outflow would otherwise flip STABLE->STABILIZING, loosening the
+    // buffer and switching to cheaper life costs — which used to make "after"
+    // paradoxically higher. Stage/buffer must be held fixed for the simulation.
+    const input = makeInput({
+      liquidCashCents: 284700,
+      events: [
+        evt({ date: '2026-07-29', amountCents: 273000, kind: 'INCOME', confidence: 'CONFIRMED' }),
+      ],
+      lifeCosts: [
+        lifeCost({
+          frequency: 'WEEKLY',
+          planningMode: 'STAGE_DEFAULT',
+          minimumCents: 10000,
+          normalCents: 17500,
+        }),
+      ],
+      fundingEvents: [funding('2026-07-29', 273000)],
+    });
+    const r = simulatePurchaseDecision(
+      { name: 'Camera', amountCents: 62900, type: 'ONE_TIME', purpose: 'FUN' },
+      input,
+    );
+    expect(r.safeToSpendAfterCents).toBeLessThanOrEqual(r.safeToSpendBeforeCents);
+    expect(r.lowestCashAfterCents).toBeLessThan(284700);
   });
 
   it('GREEN: a small buy that fits comfortably', () => {

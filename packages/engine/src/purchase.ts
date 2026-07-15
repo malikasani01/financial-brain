@@ -18,7 +18,8 @@ import type {
 } from '@fb/types';
 import { DECISION } from './constants.js';
 import { runPipelineCore } from './core.js';
-import { calculateSafeToSpend, safeToSpendFromCore } from './safe-to-spend.js';
+import { safeToSpendFromCore } from './safe-to-spend.js';
+import { walkForecast } from './forecast-core.js';
 import { calculateUrgencyScore } from './urgency.js';
 import { expandOccurrences } from './recurrence.js';
 
@@ -76,11 +77,26 @@ export function simulatePurchaseDecision(
   const baseCore = runPipelineCore(input);
   const baseStS = safeToSpendFromCore(baseCore, input);
 
-  const simInput: EngineInput = {
-    ...input,
-    events: [...input.events, ...purchaseToEvents(purchase, input)],
-  };
-  const afterStS = calculateSafeToSpend(simInput);
+  // Simulate the purchase holding stage, buffer, and life-cost assumptions
+  // FIXED at their current values. Only the cash events change, so "after"
+  // reflects the purchase's impact — not a re-staging that would loosen the
+  // buffer or switch to cheaper living costs and mask the true effect.
+  const afterEvents = [...baseCore.finalEvents, ...purchaseToEvents(purchase, input)];
+  const afterForecast = walkForecast(
+    input.liquidCashCents,
+    afterEvents,
+    input.clock.today,
+    input.horizonDays,
+    baseCore.safetyBufferCents,
+  );
+  const afterLowCents = afterForecast.lowestProjectedCashCents;
+  const afterRawHeadroomCents = afterLowCents - baseCore.safetyBufferCents;
+  const afterSafeToSpendCents = Math.max(0, afterRawHeadroomCents);
+  const daysUntilFunding = baseStS.daysUntilNextFundingEvent;
+  const afterDailyFlexCents =
+    daysUntilFunding != null && daysUntilFunding > 0
+      ? Math.floor(afterSafeToSpendCents / daysUntilFunding)
+      : null;
 
   const contributors: DecisionState[] = [];
   const reasons: string[] = [];
@@ -98,16 +114,16 @@ export function simulatePurchaseDecision(
   }
 
   // Test 2 — 90-day cash (forecast stays at/above buffer after the purchase).
-  const t2pass = afterStS.rawHeadroomCents >= 0;
+  const t2pass = afterRawHeadroomCents >= 0;
   const ninetyDayCash: TestOutcome = {
     passed: t2pass,
     contributesTo: t2pass ? 'GREEN' : 'RED',
-    detail: `Lowest projected cash after: ${afterStS.lowestProjectedCashCents}¢ vs buffer ${afterStS.safetyBufferCents}¢.`,
+    detail: `Lowest projected cash after: ${afterLowCents}¢ vs buffer ${baseCore.safetyBufferCents}¢.`,
   };
   if (!t2pass) {
     contributors.push('RED');
     reasons.push(
-      afterStS.lowestProjectedCashCents < 0
+      afterLowCents < 0
         ? 'This would push your projected cash below zero before a future paycheck.'
         : 'This would pull your forecast below your safety buffer.',
     );
@@ -216,10 +232,10 @@ export function simulatePurchaseDecision(
       ...(longHorizonLoad ? { longHorizonLoad } : {}),
     },
     safeToSpendBeforeCents: baseStS.safeToSpendCents,
-    safeToSpendAfterCents: afterStS.safeToSpendCents,
+    safeToSpendAfterCents: afterSafeToSpendCents,
     dailyFlexBeforeCents: baseStS.dailyFlexibilityCents,
-    dailyFlexAfterCents: afterStS.dailyFlexibilityCents,
-    lowestCashAfterCents: afterStS.lowestProjectedCashCents,
+    dailyFlexAfterCents: afterDailyFlexCents,
+    lowestCashAfterCents: afterLowCents,
     goalDelays,
     reasons,
   };

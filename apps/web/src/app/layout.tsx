@@ -15,8 +15,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen font-sans">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) inject
+          attributes into <body> before hydration; this silences that false alarm. */}
+      <body className="min-h-screen font-sans" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

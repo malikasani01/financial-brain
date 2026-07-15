@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { recalculateFinancials } from '@fb/data';
+import type { DecisionType, PurchaseInput, Purpose } from '@fb/types';
+import { buildEngineInput, recalculateFinancials } from '@fb/data';
+import { FORECAST_HORIZON_DAYS, simulatePurchaseDecision } from '@fb/engine';
 import { getSessionContext } from '@/lib/session';
 import { dollarsToCents, dollarsToCentsOrNull, textOrNull } from '@/lib/money';
 import { STEPS } from '@/lib/onboarding';
@@ -148,6 +150,87 @@ export async function quickUpdateBalances(fd: FormData): Promise<void> {
   }
   await recalculateFinancials(supabase, userId, clock);
   revalidatePath('/', 'layout');
+}
+
+// ---- Ask Before I Spend ----------------------------------------------------
+
+/** Run the deterministic decision engine on a proposed purchase, persist it, show the result. */
+export async function checkPurchase(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const input = await buildEngineInput(supabase, userId, clock, FORECAST_HORIZON_DAYS);
+
+  const monthly = dollarsToCentsOrNull(fd.get('monthly_payment'));
+  const termRaw = fd.get('term_months');
+  const term = termRaw && String(termRaw).trim() !== '' ? Number(termRaw) : null;
+
+  const purchase: PurchaseInput = {
+    name: String(fd.get('name') || 'Purchase'),
+    amountCents: dollarsToCents(fd.get('amount')),
+    type: String(fd.get('decision_type') || 'ONE_TIME') as DecisionType,
+    purpose: String(fd.get('purpose') || 'OTHER') as Purpose,
+    ...(monthly != null ? { monthlyPaymentCents: monthly } : {}),
+    ...(term != null ? { termMonths: term } : {}),
+  };
+
+  const result = simulatePurchaseDecision(purchase, input);
+
+  const { data, error } = await supabase
+    .from('purchase_decisions')
+    .insert({
+      user_id: userId,
+      name: purchase.name,
+      amount_cents: purchase.amountCents,
+      decision_type: purchase.type,
+      purpose: purchase.purpose,
+      monthly_payment_cents: purchase.monthlyPaymentCents ?? null,
+      term_months: purchase.termMonths ?? null,
+      note: textOrNull(fd.get('note')),
+      link: textOrNull(fd.get('link')),
+      result_state: result.state,
+      result_json: result,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+
+  redirect(`/ask/${(data as { id: string }).id}/result`);
+}
+
+/** "Add to my plan" from a decision result: create a planned purchase, recalc. */
+export async function addPurchaseToPlan(decisionId: string, buyAnyway: boolean): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data: d, error } = await supabase
+    .from('purchase_decisions')
+    .select('amount_cents,decision_type,monthly_payment_cents,term_months')
+    .eq('id', decisionId)
+    .eq('user_id', userId)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const dec = d as {
+    amount_cents: number;
+    decision_type: string;
+    monthly_payment_cents: number | null;
+    term_months: number | null;
+  };
+  const recurring = dec.decision_type !== 'ONE_TIME' && dec.decision_type !== 'OTHER';
+
+  await supabase.from('planned_purchases').insert({
+    user_id: userId,
+    purchase_decision_id: decisionId,
+    amount_cents: recurring ? (dec.monthly_payment_cents ?? dec.amount_cents) : dec.amount_cents,
+    planned_date: clock.today,
+    frequency: recurring ? 'MONTHLY' : 'ONE_TIME',
+    term_months: dec.term_months,
+  });
+  if (buyAnyway) {
+    await supabase
+      .from('purchase_decisions')
+      .update({ chose_buy_anyway: true })
+      .eq('id', decisionId);
+  }
+  await recalculateFinancials(supabase, userId, clock);
+  redirect('/home');
 }
 
 export async function setOnboardingStep(step: number): Promise<void> {

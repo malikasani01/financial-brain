@@ -9,18 +9,15 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Clock, EngineOutput } from '@fb/types';
-import { computeEngineOutput } from '@fb/engine';
-import { FORECAST_HORIZON_DAYS } from '@fb/engine';
-import { fetchUserFinancialData } from './repositories.js';
-import { normalizeToEngineInput } from './normalize.js';
+import { computeEngineOutput, FORECAST_HORIZON_DAYS } from '@fb/engine';
+import { buildEngineInput } from './engine-input.js';
 
 export async function recalculateFinancials(
   supabase: SupabaseClient,
   userId: string,
   clock: Clock,
 ): Promise<EngineOutput> {
-  const raw = await fetchUserFinancialData(supabase, userId);
-  const input = normalizeToEngineInput(raw, clock, FORECAST_HORIZON_DAYS);
+  const input = await buildEngineInput(supabase, userId, clock, FORECAST_HORIZON_DAYS);
   const output = computeEngineOutput(input);
 
   const { error: snapErr } = await supabase.from('forecast_snapshots').insert({

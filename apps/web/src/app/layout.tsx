@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 
 export const metadata: Metadata = {
   title: 'Financial Brain',
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           attributes into <body> before hydration; this silences that false alarm. */}
       <body className="min-h-screen font-sans" suppressHydrationWarning>
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

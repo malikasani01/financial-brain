@@ -1,10 +1,32 @@
 import Link from 'next/link';
 import type { CashEvent } from '@fb/types';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadEngineView } from '@/lib/engine-view';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
+
+/** Whole days since the most recently updated account balance (PRD §55). */
+async function oldestBalanceAgeDays(
+  supabase: SupabaseClient,
+  userId: string,
+  today: string,
+): Promise<number | null> {
+  const { data } = await supabase
+    .from('accounts')
+    .select('balance_updated_at')
+    .eq('user_id', userId)
+    .is('archived_at', null);
+  const rows = (data ?? []) as { balance_updated_at: string | null }[];
+  if (rows.length === 0) return null;
+  const newest = rows
+    .map((r) => (r.balance_updated_at ? r.balance_updated_at.slice(0, 10) : today))
+    .sort()
+    .at(-1)!;
+  const MS = 86_400_000;
+  return Math.max(0, Math.round((Date.parse(today) - Date.parse(newest)) / MS));
+}
 
 function greeting(tz: string): string {
   const hour = Number(
@@ -27,7 +49,7 @@ const KIND_LABEL: Record<CashEvent['kind'], string> = {
 };
 
 export default async function HomePage() {
-  const { output, input, clock } = await loadEngineView();
+  const { output, input, clock, supabase, userId } = await loadEngineView();
   const s = output.safeToSpend;
 
   const obligationName = new Map(input.obligations.map((o) => [o.id, o.name]));
@@ -43,6 +65,7 @@ export default async function HomePage() {
   const urgentCount = nextMoves.filter((u) => u.score >= 70).length;
   const nextFunding = input.fundingEvents.find((f) => f.date > clock.today);
   const alreadyNeeded = s.currentLiquidCashCents - s.lowestProjectedCashCents;
+  const staleDays = await oldestBalanceAgeDays(supabase, userId, clock.today);
 
   const timeline = [...input.events]
     .filter((e) => e.date >= clock.today)
@@ -51,7 +74,22 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-md px-6 py-10">
-      <p className="text-muted">{greeting(clock.timezone)}, Malika.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-muted">{greeting(clock.timezone)}, Malika.</p>
+        <Link href="/settings" className="text-sm text-forest underline underline-offset-4">
+          Manage
+        </Link>
+      </div>
+
+      {staleDays != null && staleDays >= 7 && (
+        <div className="mt-4 rounded-2xl bg-terracotta/10 px-4 py-3 text-sm text-terracotta">
+          Your balances were last updated {staleDays} days ago. Safe to Spend may no longer reflect
+          your current cash.{' '}
+          <Link href="/accounts" className="underline">
+            Update balances
+          </Link>
+        </div>
+      )}
 
       <Card className="mt-5 text-center">
         <p className="text-6xl font-semibold text-forest">

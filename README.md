@@ -118,6 +118,20 @@ tells you it isn't connected yet rather than erroring.
   the number of paying customers needed to reach the Freedom Number. All deterministic and
   unit-tested; MVP intentionally excludes CAC/LTV/churn/conversion/cohorts.
 
+**Phase 6 complete** — polish and the secondary management screens:
+
+- **Manage hub** (`/settings`, linked from Home) → dedicated screens for **Accounts**
+  (one-screen "update today's balances"), **Income** (mark received), **Obligations**
+  (record payment / mark resolved), **Subscriptions** (pause with a savings insight), and
+  **Normal life costs** (choose the planning amount). Every edit recalculates.
+- **Installable PWA** — web manifest, an app icon, and a conservative network-first
+  service worker (registered in production only).
+- **Balance-freshness warning** on Home when balances are stale (PRD §55), plus
+  friendly **error / loading / not-found** screens.
+
+All six phases (0–6) are built. To use it end to end: connect Supabase, apply the
+migrations, fill `.env.local`, and (for the Brain) add `ANTHROPIC_API_KEY`.
+
 ### Known notes
 
 - Dev-tooling audit advisories (esbuild → vite → vitest chain) are **dev-only** and not in

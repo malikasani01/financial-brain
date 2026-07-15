@@ -1,0 +1,91 @@
+/**
+ * The ONLY place that reads financial rows from Supabase. Returns raw rows for
+ * the pure normalizer to consume. RLS ensures a user sees only their own rows,
+ * so every query is implicitly scoped by the authenticated session.
+ */
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RawFinancialData } from './rows.js';
+
+/** Columns we select per table (kept explicit so the row types stay honest). */
+const SELECTS = {
+  accounts: 'id,balance_cents,type,archived_at',
+  reservations: 'id,amount_cents,linked_obligation_id,archived_at',
+  income: 'id,name,net_amount_cents,frequency,next_expected_date,confidence,paused,archived_at',
+  obligations:
+    'id,name,category,amount_due_cents,minimum_required_cents,due_date,frequency,status,priority_class,is_essential,is_negotiable,next_expected_payment_date,days_overdue,total_past_due_cents,consequence_type,consequence_already_occurring,consequence_date,interest_rate,late_fee_cents,penalty_cents,resolved,archived_at',
+  subscriptions: 'id,name,amount_cents,frequency,next_charge_date,purpose,paused,archived_at',
+  lifeCosts:
+    'id,category,frequency,minimum_cents,normal_cents,planning_mode,custom_cents,is_essential,archived_at',
+  goals:
+    'id,name,category,target_cents,saved_cents,target_date,personal_priority,committed_per_paycheck_cents,archived_at',
+  planned: 'id,amount_cents,planned_date,frequency,term_months,archived_at',
+  businesses: 'id,monthly_revenue_cents',
+} as const;
+
+export async function fetchUserFinancialData(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<RawFinancialData> {
+  const q = (table: string, select: string) =>
+    supabase.from(table).select(select).eq('user_id', userId);
+
+  const [
+    accounts,
+    reservations,
+    incomeSources,
+    obligations,
+    subscriptions,
+    lifeCosts,
+    goals,
+    plannedPurchases,
+    businesses,
+    preferences,
+  ] = await Promise.all([
+    q('accounts', SELECTS.accounts),
+    q('cash_reservations', SELECTS.reservations),
+    q('income_sources', SELECTS.income),
+    q('obligations', SELECTS.obligations),
+    q('subscriptions', SELECTS.subscriptions),
+    q('life_cost_categories', SELECTS.lifeCosts),
+    q('goals', SELECTS.goals),
+    q('planned_purchases', SELECTS.planned),
+    q('businesses', SELECTS.businesses),
+    supabase
+      .from('user_preferences')
+      .select('safety_buffer_override_cents')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ]);
+
+  const err =
+    accounts.error ??
+    reservations.error ??
+    incomeSources.error ??
+    obligations.error ??
+    subscriptions.error ??
+    lifeCosts.error ??
+    goals.error ??
+    plannedPurchases.error ??
+    businesses.error ??
+    preferences.error;
+  if (err) throw new Error(`Failed to load financial data: ${err.message}`);
+
+  // The untyped client returns loose row shapes; cast through unknown. Column
+  // selection above keeps these casts honest against the real schema.
+  const rows = <K extends keyof RawFinancialData>(data: unknown): RawFinancialData[K] =>
+    (data ?? []) as RawFinancialData[K];
+
+  return {
+    accounts: rows<'accounts'>(accounts.data),
+    reservations: rows<'reservations'>(reservations.data),
+    incomeSources: rows<'incomeSources'>(incomeSources.data),
+    obligations: rows<'obligations'>(obligations.data),
+    subscriptions: rows<'subscriptions'>(subscriptions.data),
+    lifeCosts: rows<'lifeCosts'>(lifeCosts.data),
+    goals: rows<'goals'>(goals.data),
+    plannedPurchases: rows<'plannedPurchases'>(plannedPurchases.data),
+    businesses: rows<'businesses'>(businesses.data),
+    preferences: (preferences.data ?? null) as unknown as RawFinancialData['preferences'],
+  };
+}

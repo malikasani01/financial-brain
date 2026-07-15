@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "@fb/types": "*"
   },
   "devDependencies": {

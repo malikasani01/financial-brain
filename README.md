@@ -93,8 +93,21 @@ coverage, golden fixtures reproducing the spec's $183 / $629 examples.
 To try it end-to-end you must connect a Supabase project (see Setup) and apply the
 migrations; the app then runs the real engine over data you enter.
 
-**Phase 3 (next):** the daily product — Home dashboard, Today's Priority Plan, Paycheck
-Plan, Money Allocation, and the Ask-Before-I-Spend decision flow.
+**Phase 3 complete** — the daily product: Home dashboard, Safe-to-Spend detail, Ask
+Before I Spend (with the GREEN/YELLOW/RED decision result), Priorities, Money
+Allocation, Goals, read-only Paycheck Plan, and the mobile bottom nav.
+
+**Phase 4 complete** — the AI Financial Brain (`@fb/ai`), strictly **AI EXPLAINS, CODE
+DECIDES**:
+
+- A context builder that hands Claude only whitelisted, already-computed, dollar-
+  formatted engine outputs — never the raw database, never arithmetic to perform.
+- A calm, non-shaming system prompt and a server-side `claude-opus-4-8` call
+  (`ANTHROPIC_API_KEY` stays on the server).
+- A Brain chat screen with suggested questions and persisted conversation history.
+
+Set `ANTHROPIC_API_KEY` in `apps/web/.env.local` to enable it; without a key the Brain
+tells you it isn't connected yet rather than erroring.
 
 ### Known notes
 

@@ -131,8 +131,8 @@ describe('normalizeToEngineInput', () => {
           archived_at: null,
         },
         {
-          id: 'celo',
-          name: 'Celo',
+          id: 'saylo',
+          name: 'Saylo',
           net_amount_cents: 500000,
           frequency: 'MONTHLY',
           next_expected_date: '2026-07-20',

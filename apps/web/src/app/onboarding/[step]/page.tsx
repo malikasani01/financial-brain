@@ -519,7 +519,7 @@ async function renderStep(slug: string) {
             <div className="border-t border-sage/20 pt-4">
               <p className="text-sm text-muted">Optional: a business you&apos;re building</p>
               <div className="mt-3 grid gap-4">
-                <Field label="Business name" name="business_name" placeholder="Celo" />
+                <Field label="Business name" name="business_name" placeholder="Saylo" />
                 <Field
                   label="Current monthly revenue"
                   name="business_revenue"

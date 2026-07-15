@@ -1,0 +1,26 @@
+{
+  "name": "financial-brain",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Private, mobile-first personal financial decision system. CODE DECIDES. AI EXPLAINS.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:engine": "npm run test --workspace @fb/engine",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "dev": "npm run dev --workspace @fb/web"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

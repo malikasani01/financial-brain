@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# env
+.env
+.env*.local
+.env.local
+
+# supabase
+supabase/.branches
+supabase/.temp
+**/supabase/.temp
+
+# test / coverage
+coverage/
+.vitest/
+
+# editor / os
+.DS_Store
+Thumbs.db
+.idea/
+*.log
+npm-debug.log*
+
+# claude local
+.claude/settings.local.json

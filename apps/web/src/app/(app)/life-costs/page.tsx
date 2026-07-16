@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { listOwn } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
-import { addLifeCost } from '@/app/actions/financial';
+import { LifeCostFields, EditForm } from '@/components/entity-fields';
+import { addLifeCost, updateLifeCost } from '@/app/actions/financial';
 import { archiveAndRecalc, setLifeCostPlanning } from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,9 @@ export default async function LifeCostsPage() {
                   <PrimaryButton>Save</PrimaryButton>
                 </form>
               </details>
+              <EditForm action={updateLifeCost.bind(null, r.id)}>
+                <LifeCostFields d={r} />
+              </EditForm>
             </Card>
           </li>
         ))}

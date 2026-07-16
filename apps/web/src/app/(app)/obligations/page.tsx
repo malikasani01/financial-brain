@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { listOwn } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
+import { ObligationFields, EditForm } from '@/components/entity-fields';
+import { updateObligation } from '@/app/actions/financial';
 import {
   archiveAndRecalc,
   markObligationResolved,
@@ -14,7 +16,7 @@ export default async function ObligationsPage() {
   const [rows, accounts] = await Promise.all([
     listOwn(
       'obligations',
-      'id,name,category,amount_due_cents,minimum_required_cents,status,resolved',
+      'id,name,category,amount_due_cents,minimum_required_cents,due_date,frequency,status,resolved,is_essential,is_negotiable,days_overdue,total_past_due_cents,consequence_type,consequence_already_occurring,interest_rate',
     ),
     listOwn('accounts', 'id,name'),
   ]);
@@ -89,6 +91,9 @@ export default async function ObligationsPage() {
                     </form>
                   </div>
                 )}
+                <EditForm action={updateObligation.bind(null, r.id)}>
+                  <ObligationFields d={r} />
+                </EditForm>
               </Card>
             </li>
           );

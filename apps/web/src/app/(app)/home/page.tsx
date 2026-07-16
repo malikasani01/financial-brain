@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { CashEvent } from '@fb/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadEngineView } from '@/lib/engine-view';
+import { listOwn } from '@/lib/db';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 
@@ -71,6 +72,16 @@ export default async function HomePage() {
     .filter((e) => e.date >= clock.today)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     .slice(0, 6);
+
+  // Real names for the timeline: events carry only a sourceId.
+  const [subRows, incomeRows] = await Promise.all([
+    listOwn('subscriptions', 'id,name'),
+    listOwn('income_sources', 'id,name'),
+  ]);
+  const nameById = new Map<string, string>();
+  for (const o of input.obligations) nameById.set(o.id, o.name);
+  for (const g of input.goals) nameById.set(g.id, g.name);
+  for (const r of [...subRows, ...incomeRows]) nameById.set(r.id, String(r.name));
 
   return (
     <main className="mx-auto max-w-md px-6 py-10">
@@ -165,7 +176,9 @@ export default async function HomePage() {
             className="flex items-center justify-between border-t border-sage/20 py-3 first:border-t-0"
           >
             <span className="text-sm text-muted">{e.date}</span>
-            <span className="text-ink">{KIND_LABEL[e.kind]}</span>
+            <span className="flex-1 truncate px-3 text-ink">
+              {nameById.get(e.sourceId) ?? KIND_LABEL[e.kind]}
+            </span>
             <span className={e.amountCents >= 0 ? 'text-forest' : 'text-ink'}>
               {e.amountCents >= 0 ? '+' : ''}
               {centsToDollars(e.amountCents)}

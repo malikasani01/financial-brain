@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { loadEngineView } from '@/lib/engine-view';
+import { listOwn } from '@/lib/db';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
+import { GoalFields, EditForm } from '@/components/entity-fields';
+import { updateGoal } from '@/app/actions/financial';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +15,12 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
   const goal = input.goals.find((g) => g.id === id);
   const f = output.goalFeasibility.find((x) => x.goalId === id);
   if (!goal || !f) notFound();
+
+  const goalRows = await listOwn(
+    'goals',
+    'id,name,category,target_cents,saved_cents,target_date,personal_priority,committed_per_paycheck_cents',
+  );
+  const goalRow = goalRows.find((g) => g.id === id);
 
   return (
     <main className="mx-auto max-w-md px-6 py-10">
@@ -53,6 +62,15 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
               )}. Increase the per-paycheck amount, move the date, or free up cash elsewhere.`
             : 'Set a committed per-paycheck amount to start moving toward this goal.'}
       </div>
+
+      {goalRow && (
+        <Card className="mt-4">
+          <p className="text-sm text-muted">Edit this goal</p>
+          <EditForm action={updateGoal.bind(null, id)}>
+            <GoalFields d={goalRow} />
+          </EditForm>
+        </Card>
+      )}
     </main>
   );
 }

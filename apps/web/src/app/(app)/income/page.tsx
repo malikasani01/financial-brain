@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { listOwn } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
-import { addIncome } from '@/app/actions/financial';
+import { IncomeFields, EditForm } from '@/components/entity-fields';
+import { addIncome, updateIncome } from '@/app/actions/financial';
 import { archiveAndRecalc, markIncomeReceived } from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,10 @@ const FREQS = [
 
 export default async function IncomePage() {
   const [rows, accounts] = await Promise.all([
-    listOwn('income_sources', 'id,name,net_amount_cents,confidence,next_expected_date'),
+    listOwn(
+      'income_sources',
+      'id,name,source_type,net_amount_cents,frequency,next_expected_date,confidence',
+    ),
     listOwn('accounts', 'id,name'),
   ]);
   const accountOptions = accounts.map((a) => ({ value: a.id, label: String(a.name) }));
@@ -60,6 +64,9 @@ export default async function IncomePage() {
                   <PrimaryButton>Record deposit</PrimaryButton>
                 </form>
               </details>
+              <EditForm action={updateIncome.bind(null, r.id)}>
+                <IncomeFields d={r} />
+              </EditForm>
             </Card>
           </li>
         ))}

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { CashEvent } from '@fb/types';
 import { loadEngineView } from '@/lib/engine-view';
+import { listOwn } from '@/lib/db';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 
@@ -15,9 +16,31 @@ const KIND_LABEL: Record<CashEvent['kind'], string> = {
   PLANNED_PURCHASE: 'Planned purchase',
 };
 
+/** How each non-confirmed reliability reads to the user. */
+const CONFIDENCE_LABEL: Record<string, string> = {
+  HIGHLY_LIKELY: 'Expected — may change',
+  VARIABLE: 'Varies',
+  SPECULATIVE: 'Only a possibility',
+};
+
 export default async function PlanPage() {
   const { input, output, clock } = await loadEngineView();
   const s = output.safeToSpend;
+
+  // Real names for the "what must be covered" list — events only carry a
+  // sourceId, so map each id back to its human name (falls back to the kind).
+  const [oblRows, subRows, goalRows, incomeRows] = await Promise.all([
+    listOwn('obligations', 'id,name'),
+    listOwn('subscriptions', 'id,name'),
+    listOwn('goals', 'id,name'),
+    listOwn('income_sources', 'id,name,net_amount_cents,frequency,confidence'),
+  ]);
+  const nameById = new Map<string, string>();
+  for (const r of [...oblRows, ...subRows, ...goalRows]) nameById.set(r.id, String(r.name));
+
+  // Income the user did NOT confirm never counts toward Safe to Spend (the
+  // safety rule), but we surface it here so it isn't invisible.
+  const unconfirmedIncome = incomeRows.filter((r) => String(r.confidence) !== 'CONFIRMED');
 
   const nextFunding = input.fundingEvents.find((f) => f.date > clock.today);
   const until = nextFunding?.date;
@@ -62,10 +85,13 @@ export default async function PlanPage() {
         {beforeNext.map((e, i) => (
           <li
             key={`${e.sourceId}-${e.date}-${i}`}
-            className="flex items-center justify-between border-t border-sage/20 py-3 first:border-t-0"
+            className="flex items-center justify-between gap-3 border-t border-sage/20 py-3 first:border-t-0"
           >
             <span className="text-sm text-muted">{e.date}</span>
-            <span className="text-ink">{KIND_LABEL[e.kind]}</span>
+            <span className="flex-1 truncate text-ink">
+              {nameById.get(e.sourceId) ?? KIND_LABEL[e.kind]}
+              <span className="ml-2 text-xs text-muted">{KIND_LABEL[e.kind]}</span>
+            </span>
             <span className="text-ink">{centsToDollars(e.amountCents)}</span>
           </li>
         ))}
@@ -75,6 +101,32 @@ export default async function PlanPage() {
         <p className="mt-2 text-right text-sm text-muted">
           Total: {centsToDollars(beforeNextTotal)}
         </p>
+      )}
+
+      {unconfirmedIncome.length > 0 && (
+        <>
+          <h2 className="mt-8 text-lg font-semibold text-forest">Potential extra income</h2>
+          <p className="mt-1 text-sm text-muted">
+            Not counted in Safe to Spend — income only counts once you mark it as sure. Here so you
+            can see it.
+          </p>
+          <ul className="mt-3 rounded-card bg-white/60 px-6 py-2 shadow-card">
+            {unconfirmedIncome.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-3 border-t border-sage/20 py-3 first:border-t-0"
+              >
+                <span className="flex-1 truncate text-ink">
+                  {String(r.name)}
+                  <span className="ml-2 text-xs text-muted">
+                    {CONFIDENCE_LABEL[String(r.confidence)] ?? 'Not counted'}
+                  </span>
+                </span>
+                <span className="text-muted">{centsToDollars(Number(r.net_amount_cents))}</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <div className="mt-8 space-y-3">

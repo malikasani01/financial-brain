@@ -36,6 +36,29 @@ export async function archiveRow(table: string, id: string): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
+/**
+ * Update one of the current user's rows, then recalculate. Used by the edit
+ * forms in onboarding and the management screens — editing a stored value can
+ * change the forecast, so we recompute immediately (unlike adds during
+ * onboarding, which recalc once at the end).
+ */
+async function updateOwn(
+  table: string,
+  id: string,
+  values: Record<string, unknown>,
+): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { error } = await supabase
+    .from(table)
+    .update(values)
+    .eq('id', id)
+    .eq('user_id', userId);
+  if (error) throw new Error(error.message);
+  await recalculateFinancials(supabase, userId, clock);
+  revalidatePath('/onboarding', 'layout');
+  revalidatePath('/', 'layout');
+}
+
 // ---- Onboarding entity adds ------------------------------------------------
 
 export async function addAccount(fd: FormData): Promise<void> {
@@ -102,6 +125,80 @@ export async function addSubscription(fd: FormData): Promise<void> {
 
 export async function addGoal(fd: FormData): Promise<void> {
   await insert('goals', {
+    name: fd.get('name'),
+    category: fd.get('category') ?? 'Other',
+    target_cents: dollarsToCents(fd.get('target')),
+    saved_cents: dollarsToCents(fd.get('saved')),
+    target_date: textOrNull(fd.get('target_date')),
+    personal_priority: fd.get('personal_priority') ?? 'IMPORTANT',
+    committed_per_paycheck_cents: dollarsToCents(fd.get('committed_per_paycheck')),
+  });
+}
+
+// ---- Entity edits (mirror the adds above; used by edit forms) --------------
+
+export async function updateAccount(id: string, fd: FormData): Promise<void> {
+  await updateOwn('accounts', id, {
+    name: fd.get('name'),
+    type: fd.get('type') ?? 'checking',
+    balance_cents: dollarsToCents(fd.get('balance')),
+  });
+}
+
+export async function updateIncome(id: string, fd: FormData): Promise<void> {
+  await updateOwn('income_sources', id, {
+    name: fd.get('name'),
+    source_type: fd.get('source_type') ?? 'Employment paycheck',
+    net_amount_cents: dollarsToCents(fd.get('amount')),
+    frequency: fd.get('frequency') ?? 'BIWEEKLY',
+    next_expected_date: textOrNull(fd.get('next_expected_date')),
+    confidence: fd.get('confidence') ?? 'CONFIRMED',
+  });
+}
+
+export async function updateObligation(id: string, fd: FormData): Promise<void> {
+  const status = (fd.get('status') as string) ?? 'CURRENT';
+  const behind = status === 'OVERDUE' || status === 'SEVERELY_OVERDUE';
+  await updateOwn('obligations', id, {
+    name: fd.get('name'),
+    category: fd.get('category') ?? 'Other',
+    amount_due_cents: dollarsToCentsOrNull(fd.get('amount_due')),
+    minimum_required_cents: dollarsToCentsOrNull(fd.get('minimum_required')),
+    due_date: textOrNull(fd.get('due_date')),
+    frequency: fd.get('frequency') ?? 'MONTHLY',
+    status,
+    is_essential: fd.get('is_essential') === 'on',
+    is_negotiable: fd.get('is_negotiable') === 'on',
+    days_overdue: behind ? Number(fd.get('days_overdue') ?? 0) || null : null,
+    total_past_due_cents: behind ? dollarsToCentsOrNull(fd.get('total_past_due')) : null,
+    consequence_type: behind ? textOrNull(fd.get('consequence_type')) : null,
+    consequence_already_occurring: behind ? fd.get('consequence_occurring') === 'on' : null,
+    interest_rate: behind ? Number(fd.get('interest_rate')) || null : null,
+  });
+}
+
+export async function updateLifeCost(id: string, fd: FormData): Promise<void> {
+  await updateOwn('life_cost_categories', id, {
+    category: fd.get('category') ?? 'Groceries',
+    frequency: fd.get('frequency') ?? 'WEEKLY',
+    minimum_cents: dollarsToCents(fd.get('minimum')),
+    normal_cents: dollarsToCents(fd.get('normal')),
+  });
+}
+
+export async function updateSubscription(id: string, fd: FormData): Promise<void> {
+  await updateOwn('subscriptions', id, {
+    name: fd.get('name'),
+    amount_cents: dollarsToCents(fd.get('amount')),
+    frequency: fd.get('frequency') ?? 'MONTHLY',
+    next_charge_date: textOrNull(fd.get('next_charge_date')),
+    purpose: textOrNull(fd.get('purpose')),
+    pause_preference: textOrNull(fd.get('pause_preference')),
+  });
+}
+
+export async function updateGoal(id: string, fd: FormData): Promise<void> {
+  await updateOwn('goals', id, {
     name: fd.get('name'),
     category: fd.get('category') ?? 'Other',
     target_cents: dollarsToCents(fd.get('target')),

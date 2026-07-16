@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { listOwn, dollarsInput } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
-import { addAccount, quickUpdateBalances } from '@/app/actions/financial';
+import { AccountFields, EditForm } from '@/components/entity-fields';
+import { addAccount, quickUpdateBalances, updateAccount } from '@/app/actions/financial';
 import { archiveAndRecalc } from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
@@ -39,14 +40,19 @@ export default async function AccountsPage() {
       <ul className="mt-4 space-y-2">
         {rows.map((r) => (
           <li key={r.id}>
-            <Card className="flex items-center justify-between">
-              <div>
-                <p className="text-ink">{String(r.name)}</p>
-                <p className="text-sm text-muted">{centsToDollars(Number(r.balance_cents))}</p>
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-ink">{String(r.name)}</p>
+                  <p className="text-sm text-muted">{centsToDollars(Number(r.balance_cents))}</p>
+                </div>
+                <form action={archiveAndRecalc.bind(null, 'accounts', r.id, '/accounts')}>
+                  <button className="text-sm text-terracotta">Remove</button>
+                </form>
               </div>
-              <form action={archiveAndRecalc.bind(null, 'accounts', r.id, '/accounts')}>
-                <button className="text-sm text-terracotta">Remove</button>
-              </form>
+              <EditForm action={updateAccount.bind(null, r.id)}>
+                <AccountFields d={r} />
+              </EditForm>
             </Card>
           </li>
         ))}

@@ -5,6 +5,15 @@ import { STEPS, stepIndex } from '@/lib/onboarding';
 import { centsToDollars } from '@/lib/money';
 import { Card, CheckboxField, Field, PrimaryButton, SelectField } from '@/components/ui';
 import {
+  AccountFields,
+  EditForm,
+  GoalFields,
+  IncomeFields,
+  LifeCostFields,
+  ObligationFields,
+  SubscriptionFields,
+} from '@/components/entity-fields';
+import {
   addAccount,
   addGoal,
   addIncome,
@@ -14,6 +23,12 @@ import {
   advanceOnboarding,
   archiveRow,
   saveFreedom,
+  updateAccount,
+  updateGoal,
+  updateIncome,
+  updateLifeCost,
+  updateObligation,
+  updateSubscription,
 } from '@/app/actions/financial';
 
 export const dynamic = 'force-dynamic';
@@ -50,21 +65,26 @@ function RowItem({
   id,
   primary,
   secondary,
+  edit,
 }: {
   table: string;
   id: string;
   primary: string;
   secondary: string;
+  edit?: React.ReactNode;
 }) {
   return (
-    <li className="flex items-center justify-between border-t border-sage/20 py-3 first:border-t-0">
-      <div>
-        <p className="text-ink">{primary}</p>
-        <p className="text-sm text-muted">{secondary}</p>
+    <li className="border-t border-sage/20 py-3 first:border-t-0">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-ink">{primary}</p>
+          <p className="text-sm text-muted">{secondary}</p>
+        </div>
+        <form action={archiveRow.bind(null, table, id)}>
+          <button className="text-sm text-terracotta">Remove</button>
+        </form>
       </div>
-      <form action={archiveRow.bind(null, table, id)}>
-        <button className="text-sm text-terracotta">Remove</button>
-      </form>
+      {edit}
     </li>
   );
 }
@@ -161,6 +181,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={String(r.name)}
                 secondary={centsToDollars(Number(r.balance_cents))}
+                edit={
+                  <EditForm action={updateAccount.bind(null, r.id)}>
+                    <AccountFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>
@@ -171,7 +196,7 @@ async function renderStep(slug: string) {
     case 'income': {
       const rows = await listRows(
         'income_sources',
-        'id,name,net_amount_cents,frequency,confidence',
+        'id,name,source_type,net_amount_cents,frequency,next_expected_date,confidence',
       );
       return (
         <>
@@ -220,6 +245,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={String(r.name)}
                 secondary={`${centsToDollars(Number(r.net_amount_cents))} · ${String(r.confidence)}`}
+                edit={
+                  <EditForm action={updateIncome.bind(null, r.id)}>
+                    <IncomeFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>
@@ -228,7 +258,10 @@ async function renderStep(slug: string) {
     }
 
     case 'obligations': {
-      const rows = await listRows('obligations', 'id,name,category,amount_due_cents,status');
+      const rows = await listRows(
+        'obligations',
+        'id,name,category,amount_due_cents,minimum_required_cents,due_date,frequency,status,is_essential,is_negotiable,days_overdue,total_past_due_cents,consequence_type,consequence_already_occurring,interest_rate',
+      );
       return (
         <>
           <Card>
@@ -323,6 +356,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={`${String(r.name)} · ${String(r.category)}`}
                 secondary={`${centsToDollars(Number(r.amount_due_cents ?? 0))} · ${String(r.status)}`}
+                edit={
+                  <EditForm action={updateObligation.bind(null, r.id)}>
+                    <ObligationFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>
@@ -331,7 +369,10 @@ async function renderStep(slug: string) {
     }
 
     case 'life-costs': {
-      const rows = await listRows('life_cost_categories', 'id,category,minimum_cents,normal_cents');
+      const rows = await listRows(
+        'life_cost_categories',
+        'id,category,frequency,minimum_cents,normal_cents',
+      );
       return (
         <>
           <Card>
@@ -372,6 +413,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={String(r.category)}
                 secondary={`min ${centsToDollars(Number(r.minimum_cents))} · normal ${centsToDollars(Number(r.normal_cents))}`}
+                edit={
+                  <EditForm action={updateLifeCost.bind(null, r.id)}>
+                    <LifeCostFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>
@@ -380,7 +426,10 @@ async function renderStep(slug: string) {
     }
 
     case 'subscriptions': {
-      const rows = await listRows('subscriptions', 'id,name,amount_cents,frequency');
+      const rows = await listRows(
+        'subscriptions',
+        'id,name,amount_cents,frequency,next_charge_date,purpose,pause_preference',
+      );
       return (
         <>
           <Card>
@@ -433,6 +482,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={String(r.name)}
                 secondary={centsToDollars(Number(r.amount_cents))}
+                edit={
+                  <EditForm action={updateSubscription.bind(null, r.id)}>
+                    <SubscriptionFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>
@@ -441,7 +495,10 @@ async function renderStep(slug: string) {
     }
 
     case 'goals': {
-      const rows = await listRows('goals', 'id,name,target_cents,saved_cents');
+      const rows = await listRows(
+        'goals',
+        'id,name,category,target_cents,saved_cents,target_date,personal_priority,committed_per_paycheck_cents',
+      );
       return (
         <>
           <Card>
@@ -490,6 +547,11 @@ async function renderStep(slug: string) {
                 id={r.id}
                 primary={String(r.name)}
                 secondary={`${centsToDollars(Number(r.saved_cents))} / ${centsToDollars(Number(r.target_cents))}`}
+                edit={
+                  <EditForm action={updateGoal.bind(null, r.id)}>
+                    <GoalFields d={r} />
+                  </EditForm>
+                }
               />
             ))}
           </RowList>

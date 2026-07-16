@@ -4,13 +4,17 @@ import { monthlyEquivalentRaw } from '@fb/engine';
 import { listOwn } from '@/lib/db';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
-import { addSubscription } from '@/app/actions/financial';
+import { SubscriptionFields, EditForm } from '@/components/entity-fields';
+import { addSubscription, updateSubscription } from '@/app/actions/financial';
 import { archiveAndRecalc, setSubscriptionPaused } from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SubscriptionsPage() {
-  const rows = await listOwn('subscriptions', 'id,name,amount_cents,frequency,purpose,paused');
+  const rows = await listOwn(
+    'subscriptions',
+    'id,name,amount_cents,frequency,next_charge_date,purpose,pause_preference,paused',
+  );
 
   const pausableMonthly = rows
     .filter((r) => !r.paused)
@@ -37,26 +41,33 @@ export default async function SubscriptionsPage() {
       <ul className="mt-6 space-y-3">
         {rows.map((r) => (
           <li key={r.id}>
-            <Card className="flex items-center justify-between">
-              <div>
-                <p className="text-ink">
-                  {String(r.name)}
-                  {r.paused ? ' · paused' : ''}
-                </p>
-                <p className="text-sm text-muted">
-                  {centsToDollars(Number(r.amount_cents))} · {String(r.purpose ?? '')}
-                </p>
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-ink">
+                    {String(r.name)}
+                    {r.paused ? ' · paused' : ''}
+                  </p>
+                  <p className="text-sm text-muted">
+                    {centsToDollars(Number(r.amount_cents))} · {String(r.purpose ?? '')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <form action={setSubscriptionPaused.bind(null, r.id, !r.paused)}>
+                    <button className="text-sm text-forest underline">
+                      {r.paused ? 'Resume' : 'Pause'}
+                    </button>
+                  </form>
+                  <form
+                    action={archiveAndRecalc.bind(null, 'subscriptions', r.id, '/subscriptions')}
+                  >
+                    <button className="text-sm text-terracotta">Cancel</button>
+                  </form>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <form action={setSubscriptionPaused.bind(null, r.id, !r.paused)}>
-                  <button className="text-sm text-forest underline">
-                    {r.paused ? 'Resume' : 'Pause'}
-                  </button>
-                </form>
-                <form action={archiveAndRecalc.bind(null, 'subscriptions', r.id, '/subscriptions')}>
-                  <button className="text-sm text-terracotta">Cancel</button>
-                </form>
-              </div>
+              <EditForm action={updateSubscription.bind(null, r.id)}>
+                <SubscriptionFields d={r} />
+              </EditForm>
             </Card>
           </li>
         ))}

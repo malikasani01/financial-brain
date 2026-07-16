@@ -26,6 +26,8 @@ import {
   addBusinessScenario,
   checkPurchase,
   quickUpdateBalances,
+  updateIncome,
+  updateObligation,
 } from './financial';
 
 const CLOCK = { today: '2026-07-15', timezone: 'America/Denver' };
@@ -146,6 +148,46 @@ describe('quickUpdateBalances', () => {
     const updated = m.calls.updates.filter((u) => u.table === 'accounts');
     expect(updated).toHaveLength(2);
     expect(updated.map((u) => u.values!.balance_cents).sort()).toEqual([10000, 25050]);
+    expect(recalculateFinancials).toHaveBeenCalledOnce();
+  });
+});
+
+describe('updateObligation', () => {
+  it('updates the row (dollars to cents) and recalculates', async () => {
+    const m = makeSupabase();
+    useSupabase(m);
+    await updateObligation(
+      'ob1',
+      form({ name: 'Rent', category: 'Housing', amount_due: '1300', status: 'CURRENT', is_essential: 'on' }),
+    );
+    const u = m.calls.updates.find((x) => x.table === 'obligations')!;
+    expect(u.values).toMatchObject({
+      name: 'Rent',
+      amount_due_cents: 130000,
+      status: 'CURRENT',
+      is_essential: true,
+    });
+    // Not behind => context stays null, never fabricated on edit either.
+    expect(u.values!.days_overdue).toBeNull();
+    expect(recalculateFinancials).toHaveBeenCalledOnce();
+  });
+});
+
+describe('updateIncome', () => {
+  it('persists the edited reliability so it flows back into the forecast', async () => {
+    const m = makeSupabase();
+    useSupabase(m);
+    await updateIncome(
+      'inc1',
+      form({ name: 'Rental', amount: '900', frequency: 'MONTHLY', confidence: 'CONFIRMED' }),
+    );
+    const u = m.calls.updates.find((x) => x.table === 'income_sources')!;
+    expect(u.values).toMatchObject({
+      name: 'Rental',
+      net_amount_cents: 90000,
+      frequency: 'MONTHLY',
+      confidence: 'CONFIRMED',
+    });
     expect(recalculateFinancials).toHaveBeenCalledOnce();
   });
 });

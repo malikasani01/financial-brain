@@ -113,6 +113,61 @@ export async function setSubscriptionPaused(id: string, paused: boolean): Promis
   refresh('/subscriptions');
 }
 
+/**
+ * Record a day-to-day expense the user already incurred. The money is gone, so
+ * we lower the chosen account's balance immediately — that is what flows into
+ * the engine (Safe to Spend derives from account balances). We also log the
+ * expense so it can be listed and undone; that log is best-effort so the
+ * feature still lowers cash even before the spending_entries migration is run.
+ */
+export async function addExpense(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const amountCents = dollarsToCents(fd.get('amount'));
+  if (amountCents <= 0) return;
+  const accountId = String(fd.get('account_id') ?? '');
+  const spentDate = textOrNull(fd.get('spent_date')) ?? clock.today;
+
+  await adjustAccountBalance(supabase, userId, accountId, -amountCents);
+  // Best-effort log: if the table isn't there yet, Supabase returns an error
+  // rather than throwing, so the cash adjustment above still stands.
+  await supabase.from('spending_entries').insert({
+    user_id: userId,
+    amount_cents: amountCents,
+    description: textOrNull(fd.get('description')),
+    spent_date: spentDate,
+    account_id: accountId || null,
+  });
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Undo a logged expense: restore the money to its account and archive it. */
+export async function removeExpense(id: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('spending_entries')
+    .select('amount_cents,account_id,archived_at')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const row = data as
+    | { amount_cents: number; account_id: string | null; archived_at: string | null }
+    | null;
+  // Only reverse an entry that is still active, so a double-tap can't refund twice.
+  if (!row || row.archived_at) return;
+
+  if (row.account_id) {
+    await adjustAccountBalance(supabase, userId, row.account_id, row.amount_cents);
+  }
+  await supabase
+    .from('spending_entries')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
 /** Choose which planning amount a life cost uses in the forecast (§38). */
 export async function setLifeCostPlanning(fd: FormData): Promise<void> {
   const { supabase, userId, clock } = await getSessionContext();

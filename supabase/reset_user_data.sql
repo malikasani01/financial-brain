@@ -33,6 +33,10 @@ begin
   -- children first
   delete from public.account_balance_history   where user_id = uid;
   delete from public.cash_reservations         where user_id = uid;
+  -- spending_entries only exists once migration 0003 has been applied.
+  if to_regclass('public.spending_entries') is not null then
+    delete from public.spending_entries where user_id = uid;
+  end if;
   delete from public.obligation_payments       where user_id = uid;
   delete from public.goal_contributions        where user_id = uid;
   delete from public.business_scenarios        where user_id = uid;

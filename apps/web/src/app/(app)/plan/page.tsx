@@ -131,6 +131,12 @@ export default async function PlanPage() {
 
       <div className="mt-8 space-y-3">
         <Link
+          href="/plan/ledger"
+          className="block rounded-2xl border border-forest px-6 py-4 text-center font-medium text-forest"
+        >
+          See my running balance
+        </Link>
+        <Link
           href="/plan/priorities"
           className="block rounded-2xl border border-forest px-6 py-4 text-center font-medium text-forest"
         >

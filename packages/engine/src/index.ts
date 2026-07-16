@@ -20,6 +20,7 @@ export { allocateAvailableCash } from './allocate.js';
 export { simulatePurchaseDecision, purchaseToEvents } from './purchase.js';
 export { calculateGoalFeasibility } from './goal.js';
 export { maxAffordable } from './max-affordable.js';
+export { buildPaycheckLedger } from './ledger.js';
 
 // Freedom & business scenarios
 export {

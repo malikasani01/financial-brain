@@ -10,6 +10,7 @@ import type { Cents, Clock, ISODate } from './money.js';
 import type { DecisionState, DecisionType, FinancialStage, GoalStatus, Purpose } from './enums.js';
 import type {
   CashEvent,
+  CashEventKind,
   FundingEvent,
   GoalInput,
   LifeCostInput,
@@ -54,6 +55,53 @@ export interface ForecastResult {
   lowestCashDate: ISODate;
   negativeDates: ISODate[];
   belowBufferDates: ISODate[];
+}
+
+// ---- Paycheck ledger -------------------------------------------------------
+
+/** One posted item in the running-balance ledger. */
+export interface LedgerLine {
+  date: ISODate;
+  /** Originating record id, for labelling in the UI. */
+  sourceId: string;
+  kind: CashEventKind;
+  /** Signed: outflows negative, inflows positive. */
+  amountCents: Cents;
+  /** Balance immediately after this line is applied. */
+  runningCents: Cents;
+  /** runningCents fell below the safety buffer. */
+  belowBuffer: boolean;
+  /** runningCents went negative. */
+  negative: boolean;
+}
+
+/**
+ * A paycheck period: the income that opens it plus every outflow it must cover
+ * until the next income. `incomeDate` is null for the leading "cash on hand"
+ * block before the first paycheck lands.
+ */
+export interface LedgerPeriod {
+  incomeDate: ISODate | null;
+  /** Source ids of the income(s) opening this period (for labelling). */
+  incomeSourceIds: string[];
+  incomeAmountCents: Cents;
+  /** Running balance carried in, before this period's income. */
+  openingCents: Cents;
+  /** openingCents + incomeAmountCents — the period's "Available". */
+  availableCents: Cents;
+  lines: LedgerLine[];
+  /** Running balance at the end of the period. */
+  endingCents: Cents;
+  /** Lowest running balance reached within the period. */
+  lowestCents: Cents;
+}
+
+/** Running-balance ledger, grouped by paycheck. Reconciles with the forecast. */
+export interface PaycheckLedger {
+  periods: LedgerPeriod[];
+  safetyBufferCents: Cents;
+  /** Lowest running balance across the whole horizon. */
+  lowestCents: Cents;
 }
 
 // ---- Financial stage & buffer ---------------------------------------------

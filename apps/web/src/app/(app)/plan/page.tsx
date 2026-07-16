@@ -45,6 +45,15 @@ export default async function PlanPage() {
   for (const r of lifeRows) nameById.set(r.id, String(r.category));
   for (const r of incomeRows) nameById.set(r.id, String(r.name));
 
+  // Overdue obligations post their cure "today" regardless of due date (the
+  // money is needed now to cure them), so tag those ledger lines rather than
+  // showing a plain date that looks like it ignored the user's edit.
+  const overdueIds = new Set(
+    input.obligations
+      .filter((o) => o.status === 'OVERDUE' || o.status === 'SEVERELY_OVERDUE')
+      .map((o) => o.id),
+  );
+
   const incomeLabel = (p: LedgerPeriod): string => {
     const names = p.incomeSourceIds.map((id) => nameById.get(id)).filter(Boolean);
     return names.length > 0 ? names.join(' + ') : 'Paycheck';
@@ -73,13 +82,17 @@ export default async function PlanPage() {
       };
     }
     if (a.suggestedSavingsCents > 0) {
-      const goalName = a.suggestedGoalId ? nameById.get(a.suggestedGoalId) : null;
+      const split = a.allocations
+        .map((al) => {
+          const name = nameById.get(al.goalId) ?? 'a goal';
+          const done = al.remainingAfterCents === 0 ? ' — fully funded' : '';
+          return `${centsToDollars(al.amountCents)} to "${name}"${done}`;
+        })
+        .join(', ');
       return {
         emoji: '🟢',
         className: 'bg-forest/10 text-forest',
-        text: `Healthy period — you could add ${centsToDollars(a.suggestedSavingsCents)}${
-          goalName ? ` toward "${goalName}"` : ''
-        } and still keep your buffer safe.`,
+        text: `Healthy period — you could save ${centsToDollars(a.suggestedSavingsCents)} (${split}) and still keep your buffer safe.`,
       };
     }
     return {
@@ -188,10 +201,14 @@ export default async function PlanPage() {
                       l.negative ? 'text-terracotta' : l.belowBuffer ? 'text-amber-700' : 'text-ink'
                     }`}
                   >
-                    <span className="w-14 shrink-0 text-xs text-muted">{l.date.slice(5)}</span>
+                    <span className="w-14 shrink-0 text-xs text-muted">
+                      {overdueIds.has(l.sourceId) ? 'now' : l.date.slice(5)}
+                    </span>
                     <span className="flex-1 truncate">
                       {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
-                      <span className="ml-2 text-xs text-muted">{KIND_LABEL[l.kind]}</span>
+                      <span className="ml-2 text-xs text-muted">
+                        {overdueIds.has(l.sourceId) ? 'overdue — due now' : KIND_LABEL[l.kind]}
+                      </span>
                     </span>
                     <span className="shrink-0 tabular-nums">{centsToDollars(l.amountCents)}</span>
                     <span className="w-20 shrink-0 text-right font-medium tabular-nums">

@@ -116,17 +116,29 @@ export interface PeriodTrim {
   potentialSavingsCents: Cents;
 }
 
+/** How much of a period's savings goes to one goal. */
+export interface PeriodSavingsAllocation {
+  goalId: string;
+  amountCents: Cents;
+  /** Goal's remaining need AFTER this allocation — how much still to go. */
+  remainingAfterCents: Cents;
+}
+
 /**
- * Money-management guidance for one ledger period. `suggestedSavingsCents` is
- * bounded by every period from here through the end of the horizon, not just
- * this one — money "free" now but needed by a later period is never suggested
- * (the same principle behind Safe to Spend).
+ * Money-management guidance for one ledger period.
+ *
+ * `suggestedSavingsCents` is bounded so that saving it (plus everything saved
+ * in earlier periods) never drops any current-or-later period below the buffer
+ * — the same principle behind Safe to Spend, applied cumulatively. The total is
+ * split across goals in priority order (`allocations`), filling higher-priority
+ * goals first and decrementing each goal's remaining need as periods progress,
+ * so a goal is never over-funded and the plan shows real progress toward it.
  */
 export interface PeriodAdvice {
   health: PeriodHealth;
   suggestedSavingsCents: Cents;
-  /** The goal this period's surplus is suggested toward; null if none apply. */
-  suggestedGoalId: string | null;
+  /** Per-goal split of this period's savings, highest-priority goal first. */
+  allocations: PeriodSavingsAllocation[];
   /** Discretionary categories worth trimming toward their minimum, largest first. */
   trims: PeriodTrim[];
 }

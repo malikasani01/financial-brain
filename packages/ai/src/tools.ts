@@ -141,7 +141,13 @@ export function runBrainTool(
             endingBalance: usd(p.endingCents),
             health: a.health,
             suggestedSavings: a.suggestedSavingsCents > 0 ? usd(a.suggestedSavingsCents) : null,
-            suggestedGoal: a.suggestedGoalId ? (goalNameById.get(a.suggestedGoalId) ?? null) : null,
+            // Savings split across goals in priority order; remainingAfter shows
+            // how much of each goal is still left once this period is saved.
+            savingsByGoal: a.allocations.map((al) => ({
+              goal: goalNameById.get(al.goalId) ?? al.goalId,
+              amount: usd(al.amountCents),
+              remainingAfter: usd(al.remainingAfterCents),
+            })),
             trimSuggestions: a.trims.map((t) => ({
               category: t.category,
               potentialSavings: usd(t.potentialSavingsCents),

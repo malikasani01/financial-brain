@@ -1,14 +1,21 @@
 /**
  * Money-management guidance per paycheck-ledger period: is this period
  * healthy, tight, or negative; how much of it is genuinely safe to move to
- * savings; which goal that surplus should go toward; and which discretionary
- * life costs (groceries, eating out, ...) have room to trim if it's tight.
+ * savings and split across which goals; and which discretionary life costs
+ * (groceries, eating out, ...) have room to trim if it's tight.
  *
- * CODE DECIDES: every number here is computed, not templated guesswork. The
- * key safety rule — mirroring Safe to Spend — is that a period's suggested
- * savings amount is capped by every period from here through the end of the
- * horizon, not just this one. Cash that looks free today but is needed to
- * cover a bill three periods out is never suggested as "safe to save."
+ * CODE DECIDES: every number here is computed, not templated guesswork.
+ *
+ * Two rules matter:
+ *  1. Savings are cumulative. Money moved to a goal in one period is gone in
+ *     the next, so we carry a running `cumulativeSaved` and cap each period's
+ *     savings at (worst ending balance from here to the horizon end) minus
+ *     what's already been earmarked minus the buffer. This mirrors Safe to
+ *     Spend, applied across periods rather than at a single instant.
+ *  2. Goals fill in priority order (then smaller remaining first), and each
+ *     goal's remaining need decrements as periods save toward it — so a goal is
+ *     never suggested more than it needs, and a small emergency fund is
+ *     finished before a larger goal.
  */
 
 import type {
@@ -19,31 +26,29 @@ import type {
   PaycheckLedger,
   PeriodAdvice,
   PeriodHealth,
+  PeriodSavingsAllocation,
   PeriodTrim,
 } from '@fb/types';
 import { PERSONAL_PRIORITIES } from '@fb/types';
 import { calculateGoalFeasibility } from './goal.js';
 
-/** The single goal this ledger's surplus should be suggested toward, if any. */
-function pickGoal(
+/** Goals still needing money, in the order savings should fill them. */
+function orderedGoals(
   goals: GoalInput[],
   feasByGoal: Map<string, GoalFeasibilityResult>,
-): string | null {
-  // Every goal id is guaranteed present in feasByGoal (built from this same
-  // goals array just above), so lookups are trusted rather than guarded.
-  const active = goals.filter((g) => feasByGoal.get(g.id)!.status !== 'COMPLETED');
-  if (active.length === 0) return null;
-
+): GoalInput[] {
   const rank = (g: GoalInput) => PERSONAL_PRIORITIES.indexOf(g.personalPriority);
-  const behind = active.filter((g) => feasByGoal.get(g.id)!.feasible === false);
-  const pool = behind.length > 0 ? behind : active;
-
-  const sorted = [...pool].sort((a, b) => {
-    const byPriority = rank(a) - rank(b);
-    if (byPriority !== 0) return byPriority;
-    return feasByGoal.get(b.id)!.shortfallCents - feasByGoal.get(a.id)!.shortfallCents;
-  });
-  return sorted[0]!.id;
+  // Every goal id is present in feasByGoal (built from this same array), so
+  // lookups are trusted rather than guarded.
+  return goals
+    .filter((g) => feasByGoal.get(g.id)!.remainingCents > 0)
+    .sort((a, b) => {
+      const byPriority = rank(a) - rank(b);
+      if (byPriority !== 0) return byPriority;
+      // Same priority: finish the smaller goal first (e.g. a starter emergency
+      // fund before a large multi-thousand-dollar goal).
+      return feasByGoal.get(a.id)!.remainingCents - feasByGoal.get(b.id)!.remainingCents;
+    });
 }
 
 function healthFor(lowestCents: number, safetyBufferCents: number): PeriodHealth {
@@ -80,26 +85,44 @@ function trimsFor(
 
 export function advisePaycheckPeriods(input: EngineInput, ledger: PaycheckLedger): PeriodAdvice[] {
   const lifeCostById = new Map(input.lifeCosts.map((lc) => [lc.id, lc]));
-  const feasByGoal = new Map(
-    input.goals.map((g) => [g.id, calculateGoalFeasibility(g, input)]),
-  );
-  const suggestedGoalId = pickGoal(input.goals, feasByGoal);
+  const feasByGoal = new Map(input.goals.map((g) => [g.id, calculateGoalFeasibility(g, input)]));
+  const goals = orderedGoals(input.goals, feasByGoal);
+  const remainingByGoal = new Map(goals.map((g) => [g.id, feasByGoal.get(g.id)!.remainingCents]));
+  const buffer = ledger.safetyBufferCents;
+
+  let cumulativeSaved = 0;
 
   return ledger.periods.map((p, i) => {
-    const health = healthFor(p.lowestCents, ledger.safetyBufferCents);
+    const health = healthFor(p.lowestCents, buffer);
 
-    // Safe to save from this period on = the worst ending balance from here
-    // through the rest of the horizon, minus the buffer. Using only this
-    // period's own ending balance would ignore a shortfall later on.
+    // Worst ending balance from this period through the end of the horizon.
+    // Subtract what earlier periods already earmarked (that cash is gone) and
+    // the buffer to get what's genuinely free to save this period.
     const worstAheadCents = Math.min(...ledger.periods.slice(i).map((pp) => pp.endingCents));
-    const safeToSaveCents = Math.max(0, worstAheadCents - ledger.safetyBufferCents);
+    const availableToSaveCents = Math.max(0, worstAheadCents - cumulativeSaved - buffer);
 
-    const healthy = health === 'HEALTHY';
+    const allocations: PeriodSavingsAllocation[] = [];
+    if (health === 'HEALTHY') {
+      let budget = availableToSaveCents;
+      for (const g of goals) {
+        if (budget <= 0) break;
+        const remaining = remainingByGoal.get(g.id)!;
+        if (remaining <= 0) continue;
+        const take = Math.min(budget, remaining);
+        const remainingAfter = remaining - take;
+        allocations.push({ goalId: g.id, amountCents: take, remainingAfterCents: remainingAfter });
+        remainingByGoal.set(g.id, remainingAfter);
+        budget -= take;
+        cumulativeSaved += take;
+      }
+    }
+
+    const suggestedSavingsCents = allocations.reduce((s, a) => s + a.amountCents, 0);
     return {
       health,
-      suggestedSavingsCents: healthy ? safeToSaveCents : 0,
-      suggestedGoalId: healthy && safeToSaveCents > 0 ? suggestedGoalId : null,
-      trims: healthy ? [] : trimsFor(p.lines, lifeCostById),
+      suggestedSavingsCents,
+      allocations,
+      trims: health === 'HEALTHY' ? [] : trimsFor(p.lines, lifeCostById),
     };
   });
 }

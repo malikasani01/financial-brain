@@ -100,7 +100,7 @@ describe('runBrainTool — ledger_advice', () => {
     expect(r.periods).toEqual([]);
   });
 
-  it('reports health, available, ending balance, and safe-to-save per period', () => {
+  it('reports health, available, and ending balance; suggests no savings without goals', () => {
     const input = makeInput({
       liquidCashCents: 100000,
       bufferOverrideCents: 20000,
@@ -132,12 +132,13 @@ describe('runBrainTool — ledger_advice', () => {
     expect(p.available).toBe('$4,000');
     expect(p.endingBalance).toBe('$3,500');
     expect(p.health).toBe('HEALTHY');
-    expect(p.suggestedSavings).toBe('$3,300');
-    expect(p.suggestedGoal).toBeNull(); // no goals to suggest
+    // Healthy with headroom, but nothing to save toward with no goals defined.
+    expect(p.suggestedSavings).toBeNull();
+    expect(p.savingsByGoal).toEqual([]);
     expect(p.trimSuggestions).toEqual([]);
   });
 
-  it('names the suggested goal when an off-track goal applies', () => {
+  it('splits savings across goals with names and remaining-after', () => {
     const input = makeInput({
       liquidCashCents: 100000,
       bufferOverrideCents: 20000,
@@ -166,7 +167,13 @@ describe('runBrainTool — ledger_advice', () => {
     });
     const out = runBrainTool('ledger_advice', {}, input);
     const r = JSON.parse(out.text);
-    expect(r.periods[0].suggestedGoal).toBe('Emergency fund');
+    const byGoal = r.periods[0].savingsByGoal;
+    expect(byGoal).toHaveLength(1);
+    expect(byGoal[0].goal).toBe('Emergency fund');
+    // Period ends at $4,000; minus the $200 buffer = $3,800 safe to save.
+    expect(byGoal[0].amount).toBe('$3,800');
+    // $5,000 target - $3,800 saved = $1,200 still to go.
+    expect(byGoal[0].remainingAfter).toBe('$1,200');
   });
 });
 

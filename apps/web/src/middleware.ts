@@ -46,6 +46,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and the Next internals.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Run on everything except static assets, the manifest, and Next internals —
+  // the manifest and icons must load without a session so the install prompt
+  // and home-screen icon work before (and independent of) sign-in.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 };

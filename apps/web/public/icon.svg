@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" rx="112" fill="#20362B"/>
-  <text x="50%" y="52%" dominant-baseline="central" text-anchor="middle"
-        font-family="Georgia, 'Times New Roman', serif" font-size="300" fill="#F6F1E7">F</text>
+  <!-- faint echo of the growth path -->
+  <path d="M120 388 C 214 388, 258 300, 306 250 C 354 200, 372 168, 402 156"
+        fill="none" stroke="#8FA99A" stroke-width="24" stroke-linecap="round" opacity="0.55"/>
+  <!-- main growth path: from where you are, rising toward your goal -->
+  <path d="M120 352 C 210 352, 254 250, 300 208 C 346 166, 372 134, 402 120"
+        fill="none" stroke="#F6F1E7" stroke-width="42" stroke-linecap="round"/>
+  <!-- the seed: where you are today -->
+  <circle cx="120" cy="352" r="36" fill="#C46A4E"/>
+  <!-- the goal you're moving toward -->
+  <circle cx="402" cy="120" r="28" fill="#F6F1E7"/>
 </svg>

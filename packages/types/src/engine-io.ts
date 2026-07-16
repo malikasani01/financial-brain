@@ -104,6 +104,33 @@ export interface PaycheckLedger {
   lowestCents: Cents;
 }
 
+// ---- Paycheck ledger advice -------------------------------------------------
+
+export type PeriodHealth = 'HEALTHY' | 'TIGHT' | 'NEGATIVE';
+
+/** A discretionary life-cost category with headroom between normal and minimum. */
+export interface PeriodTrim {
+  lifeCostId: string;
+  category: string;
+  /** normalCents - minimumCents, summed across this period's occurrences. */
+  potentialSavingsCents: Cents;
+}
+
+/**
+ * Money-management guidance for one ledger period. `suggestedSavingsCents` is
+ * bounded by every period from here through the end of the horizon, not just
+ * this one — money "free" now but needed by a later period is never suggested
+ * (the same principle behind Safe to Spend).
+ */
+export interface PeriodAdvice {
+  health: PeriodHealth;
+  suggestedSavingsCents: Cents;
+  /** The goal this period's surplus is suggested toward; null if none apply. */
+  suggestedGoalId: string | null;
+  /** Discretionary categories worth trimming toward their minimum, largest first. */
+  trims: PeriodTrim[];
+}
+
 // ---- Financial stage & buffer ---------------------------------------------
 
 export interface StageResult {

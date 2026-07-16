@@ -21,6 +21,7 @@ export { simulatePurchaseDecision, purchaseToEvents } from './purchase.js';
 export { calculateGoalFeasibility } from './goal.js';
 export { maxAffordable } from './max-affordable.js';
 export { buildPaycheckLedger } from './ledger.js';
+export { advisePaycheckPeriods } from './advice.js';
 
 // Freedom & business scenarios
 export {

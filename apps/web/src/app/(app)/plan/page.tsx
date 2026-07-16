@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import type { CashEvent, LedgerPeriod } from '@fb/types';
-import { buildPaycheckLedger } from '@fb/engine';
+import type { CashEvent, LedgerPeriod, PeriodAdvice } from '@fb/types';
+import { advisePaycheckPeriods, buildPaycheckLedger } from '@fb/engine';
 import { loadEngineView } from '@/lib/engine-view';
 import { listOwn } from '@/lib/db';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
@@ -28,6 +28,7 @@ export default async function PlanPage() {
   const { input, output, clock } = await loadEngineView();
   const s = output.safeToSpend;
   const ledger = buildPaycheckLedger(input);
+  const advice = advisePaycheckPeriods(input, ledger);
 
   // Real names for the ledger and the "potential extra income" list — events
   // only carry a sourceId, so map each id back to its human name.
@@ -47,6 +48,45 @@ export default async function PlanPage() {
   const incomeLabel = (p: LedgerPeriod): string => {
     const names = p.incomeSourceIds.map((id) => nameById.get(id)).filter(Boolean);
     return names.length > 0 ? names.join(' + ') : 'Paycheck';
+  };
+
+  const trimText = (a: PeriodAdvice): string =>
+    a.trims.length > 0
+      ? ` Consider trimming ${a.trims
+          .map((t) => `${t.category} (${centsToDollars(t.potentialSavingsCents)})`)
+          .join(', ')} toward their minimum.`
+      : '';
+
+  const adviceLine = (a: PeriodAdvice): { emoji: string; className: string; text: string } => {
+    if (a.health === 'NEGATIVE') {
+      return {
+        emoji: '🔴',
+        className: 'bg-terracotta/10 text-terracotta',
+        text: `This period goes negative — something has to move.${trimText(a)}`,
+      };
+    }
+    if (a.health === 'TIGHT') {
+      return {
+        emoji: '🟠',
+        className: 'bg-amber-500/10 text-amber-700',
+        text: `Tight period — you dip below your safety buffer here.${trimText(a)}`,
+      };
+    }
+    if (a.suggestedSavingsCents > 0) {
+      const goalName = a.suggestedGoalId ? nameById.get(a.suggestedGoalId) : null;
+      return {
+        emoji: '🟢',
+        className: 'bg-forest/10 text-forest',
+        text: `Healthy period — you could add ${centsToDollars(a.suggestedSavingsCents)}${
+          goalName ? ` toward "${goalName}"` : ''
+        } and still keep your buffer safe.`,
+      };
+    }
+    return {
+      emoji: '🟢',
+      className: 'bg-forest/10 text-forest',
+      text: "Healthy period — you're staying above your safety buffer.",
+    };
   };
 
   // Income the user did NOT confirm never counts toward Safe to Spend (the
@@ -111,51 +151,58 @@ export default async function PlanPage() {
       )}
 
       <div className="mt-5 space-y-6">
-        {ledger.periods.map((p, pi) => (
-          <section key={`${p.incomeDate ?? 'onhand'}-${pi}`}>
-            <div className="flex items-baseline justify-between gap-3">
-              <div>
-                <p className="font-medium text-forest">
-                  {p.incomeDate ? incomeLabel(p) : 'Cash on hand'}
-                </p>
-                {p.incomeDate && <p className="text-xs text-muted">{p.incomeDate}</p>}
-              </div>
-              <div className="text-right">
-                {p.incomeDate && (
-                  <p className="text-sm text-forest">
-                    +{centsToDollars(p.incomeAmountCents)} received
+        {ledger.periods.map((p, pi) => {
+          const a = adviceLine(advice[pi]!);
+          return (
+            <section key={`${p.incomeDate ?? 'onhand'}-${pi}`}>
+              <div className="flex items-baseline justify-between gap-3">
+                <div>
+                  <p className="font-medium text-forest">
+                    {p.incomeDate ? incomeLabel(p) : 'Cash on hand'}
                   </p>
-                )}
-                <p className="mt-0.5 text-xs uppercase tracking-wide text-muted">Available</p>
-                <p className="font-semibold text-ink">{centsToDollars(p.availableCents)}</p>
+                  {p.incomeDate && <p className="text-xs text-muted">{p.incomeDate}</p>}
+                </div>
+                <div className="text-right">
+                  {p.incomeDate && (
+                    <p className="text-sm text-forest">
+                      +{centsToDollars(p.incomeAmountCents)} received
+                    </p>
+                  )}
+                  <p className="mt-0.5 text-xs uppercase tracking-wide text-muted">Available</p>
+                  <p className="font-semibold text-ink">{centsToDollars(p.availableCents)}</p>
+                </div>
               </div>
-            </div>
 
-            <ul className="mt-2 rounded-card bg-white/60 px-5 py-1 shadow-card">
-              {p.lines.length === 0 && (
-                <li className="py-3 text-sm text-muted">Nothing due this period.</li>
-              )}
-              {p.lines.map((l, li) => (
-                <li
-                  key={`${l.sourceId}-${l.date}-${li}`}
-                  className={`flex items-center justify-between gap-2 border-t border-sage/20 py-3 first:border-t-0 ${
-                    l.negative ? 'text-terracotta' : l.belowBuffer ? 'text-amber-700' : 'text-ink'
-                  }`}
-                >
-                  <span className="w-14 shrink-0 text-xs text-muted">{l.date.slice(5)}</span>
-                  <span className="flex-1 truncate">
-                    {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
-                    <span className="ml-2 text-xs text-muted">{KIND_LABEL[l.kind]}</span>
-                  </span>
-                  <span className="shrink-0 tabular-nums">{centsToDollars(l.amountCents)}</span>
-                  <span className="w-20 shrink-0 text-right font-medium tabular-nums">
-                    {centsToDollars(l.runningCents)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+              <p className={`mt-2 rounded-xl px-3 py-2 text-xs ${a.className}`}>
+                <span aria-hidden>{a.emoji}</span> {a.text}
+              </p>
+
+              <ul className="mt-2 rounded-card bg-white/60 px-5 py-1 shadow-card">
+                {p.lines.length === 0 && (
+                  <li className="py-3 text-sm text-muted">Nothing due this period.</li>
+                )}
+                {p.lines.map((l, li) => (
+                  <li
+                    key={`${l.sourceId}-${l.date}-${li}`}
+                    className={`flex items-center justify-between gap-2 border-t border-sage/20 py-3 first:border-t-0 ${
+                      l.negative ? 'text-terracotta' : l.belowBuffer ? 'text-amber-700' : 'text-ink'
+                    }`}
+                  >
+                    <span className="w-14 shrink-0 text-xs text-muted">{l.date.slice(5)}</span>
+                    <span className="flex-1 truncate">
+                      {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
+                      <span className="ml-2 text-xs text-muted">{KIND_LABEL[l.kind]}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums">{centsToDollars(l.amountCents)}</span>
+                    <span className="w-20 shrink-0 text-right font-medium tabular-nums">
+                      {centsToDollars(l.runningCents)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
       </div>
 
       {unconfirmedIncome.length > 0 && (

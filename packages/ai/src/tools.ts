@@ -7,7 +7,13 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { DecisionType, EngineInput, Purpose } from '@fb/types';
-import { allocateAvailableCash, maxAffordable, simulatePurchaseDecision } from '@fb/engine';
+import {
+  advisePaycheckPeriods,
+  allocateAvailableCash,
+  buildPaycheckLedger,
+  maxAffordable,
+  simulatePurchaseDecision,
+} from '@fb/engine';
 import { dollarsToCents, usd } from './money.js';
 
 export const BRAIN_TOOLS: Anthropic.Tool[] = [
@@ -50,6 +56,12 @@ export const BRAIN_TOOLS: Anthropic.Tool[] = [
       properties: { amount_dollars: { type: 'number', description: 'The available amount in dollars' } },
       required: ['amount_dollars'],
     },
+  },
+  {
+    name: 'ledger_advice',
+    description:
+      'Get money-management guidance for each upcoming paycheck period: whether it is healthy, tight, or negative; how much could safely go to savings this period and toward which goal; and which discretionary costs (like groceries or eating out) have room to be trimmed toward their minimum if the period is tight. Call this whenever the user asks how to manage money across pay periods, what to save, or what to cut back on.',
+    input_schema: { type: 'object', properties: {}, required: [] },
   },
 ];
 
@@ -113,6 +125,32 @@ export function runBrainTool(
             lines: r.lines.map((l) => ({ label: l.label, amount: usd(l.amountCents), reason: l.reason })),
             protectedAsCash: usd(r.protectedAsBufferCents),
           }),
+        };
+      }
+      case 'ledger_advice': {
+        const ledger = buildPaycheckLedger(input);
+        const advice = advisePaycheckPeriods(input, ledger);
+        const goalNameById = new Map(input.goals.map((g) => [g.id, g.name]));
+        const periods = ledger.periods.map((p, i) => {
+          const a = advice[i]!;
+          return {
+            period: p.incomeDate
+              ? `Paycheck on ${p.incomeDate}`
+              : 'Cash on hand (before the next paycheck)',
+            available: usd(p.availableCents),
+            endingBalance: usd(p.endingCents),
+            health: a.health,
+            suggestedSavings: a.suggestedSavingsCents > 0 ? usd(a.suggestedSavingsCents) : null,
+            suggestedGoal: a.suggestedGoalId ? (goalNameById.get(a.suggestedGoalId) ?? null) : null,
+            trimSuggestions: a.trims.map((t) => ({
+              category: t.category,
+              potentialSavings: usd(t.potentialSavingsCents),
+            })),
+          };
+        });
+        return {
+          isError: false,
+          text: JSON.stringify({ safetyBuffer: usd(ledger.safetyBufferCents), periods }),
         };
       }
       default:

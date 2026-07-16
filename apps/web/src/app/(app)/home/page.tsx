@@ -113,12 +113,15 @@ export default async function HomePage() {
           {centsToWholeDollars(alreadyNeeded)} is needed for upcoming obligations and{' '}
           {centsToWholeDollars(s.safetyBufferCents)} is protected.
         </p>
-        <Link
-          href="/home/safe-to-spend"
-          className="mt-3 inline-block text-sm text-forest underline"
-        >
-          Why?
-        </Link>
+        <div className="mt-3 flex items-center justify-center gap-3 text-sm">
+          <Link href="/home/safe-to-spend" className="text-forest underline">
+            Why?
+          </Link>
+          <span className="text-sage">·</span>
+          <Link href="/accounts" className="text-forest underline">
+            Update my available cash
+          </Link>
+        </div>
       </Card>
 
       <div className="mt-4 grid grid-cols-3 gap-3">

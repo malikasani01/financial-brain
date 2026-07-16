@@ -30,7 +30,10 @@ async function adjustAccountBalance(
 
 function refresh(path: string): void {
   revalidatePath(path);
-  revalidatePath('/', 'layout');
+  // '/home' shares (app)/layout.tsx with every real screen (Plan, Obligations,
+  // Accounts, ...) — '/' does not, it's a bare redirect page under the root
+  // layout only, so revalidating it invalidated nothing those screens read.
+  revalidatePath('/home', 'layout');
 }
 
 /** Soft-delete an item, then recalculate (used by management screens). */

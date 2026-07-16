@@ -20,7 +20,10 @@ async function insert(table: string, values: Record<string, unknown>): Promise<v
   const { error } = await supabase.from(table).insert({ ...values, user_id: userId });
   if (error) throw new Error(error.message);
   revalidatePath('/onboarding', 'layout');
-  revalidatePath('/', 'layout');
+  // '/home' shares (app)/layout.tsx with every real screen (Plan, Obligations,
+  // Accounts, ...) — '/' does not, it's a bare redirect page under the root
+  // layout only, so revalidating it invalidated nothing those screens read.
+  revalidatePath('/home', 'layout');
 }
 
 /** Soft-delete: archive rather than destroy (financial history is preserved). */
@@ -33,7 +36,7 @@ export async function archiveRow(table: string, id: string): Promise<void> {
     .eq('user_id', userId);
   if (error) throw new Error(error.message);
   revalidatePath('/onboarding', 'layout');
-  revalidatePath('/', 'layout');
+  revalidatePath('/home', 'layout');
 }
 
 /**
@@ -56,7 +59,7 @@ async function updateOwn(
   if (error) throw new Error(error.message);
   await recalculateFinancials(supabase, userId, clock);
   revalidatePath('/onboarding', 'layout');
-  revalidatePath('/', 'layout');
+  revalidatePath('/home', 'layout');
 }
 
 // ---- Onboarding entity adds ------------------------------------------------
@@ -227,7 +230,7 @@ export async function saveFreedom(fd: FormData): Promise<void> {
       monthly_opex_cents: dollarsToCents(fd.get('business_opex')),
     });
   }
-  revalidatePath('/', 'layout');
+  revalidatePath('/home', 'layout');
 }
 
 // ---- Freedom Plan & business scenarios -------------------------------------
@@ -324,7 +327,7 @@ export async function quickUpdateBalances(fd: FormData): Promise<void> {
       .eq('user_id', userId);
   }
   await recalculateFinancials(supabase, userId, clock);
-  revalidatePath('/', 'layout');
+  revalidatePath('/home', 'layout');
 }
 
 // ---- Ask Before I Spend ----------------------------------------------------

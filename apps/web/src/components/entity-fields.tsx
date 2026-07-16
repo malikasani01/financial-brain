@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { dollarsInput } from '@/lib/db';
-import { CheckboxField, Field, PrimaryButton, SelectField } from '@/components/ui';
+import { CheckboxField, Field, SelectField } from '@/components/ui';
+import { SaveButton } from '@/components/SaveButton';
 
 /**
  * Prefillable form-field groups, one per entity. Each takes a DB row (`d`) and
@@ -38,7 +39,7 @@ export function EditForm({
       <summary className="cursor-pointer text-sm text-forest">Edit</summary>
       <form action={action} className="mt-3 grid gap-3">
         {children}
-        <PrimaryButton>Save changes</PrimaryButton>
+        <SaveButton />
       </form>
     </details>
   );

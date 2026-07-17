@@ -26,6 +26,7 @@ const GROUPS: { title: string; items: MoreLink[] }[] = [
   {
     title: 'Your money',
     items: [
+      { href: '/transactions', label: 'Transactions', hint: 'Everything in and out', icon: 'list' },
       { href: '/accounts', label: 'Accounts', hint: 'Balances', icon: 'bank' },
       { href: '/income', label: 'Income', hint: 'What comes in', icon: 'wallet' },
       { href: '/obligations', label: 'Obligations', hint: 'Bills you owe', icon: 'list' },

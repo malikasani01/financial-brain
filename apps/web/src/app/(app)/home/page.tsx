@@ -3,33 +3,11 @@ import type { CashEvent } from '@fb/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadEngineView } from '@/lib/engine-view';
 import { listOwn } from '@/lib/db';
+import { listTransactions } from '@/lib/transactions';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
-import { QuickAddExpense } from '@/components/QuickAddExpense';
-import { addExpense, removeExpense } from '@/app/actions/manage';
-
-interface SpendingRow {
-  id: string;
-  amount_cents: number;
-  description: string | null;
-  spent_date: string;
-}
-
-/** Recent logged expenses. Resilient to the 0003 migration not being applied. */
-async function recentSpending(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<SpendingRow[]> {
-  const { data } = await supabase
-    .from('spending_entries')
-    .select('id,amount_cents,description,spent_date')
-    .eq('user_id', userId)
-    .is('archived_at', null)
-    .order('spent_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(5);
-  return (data ?? []) as SpendingRow[];
-}
+import { QuickAdd } from '@/components/QuickAdd';
+import { addTransaction, setAccountBalance } from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,7 +88,7 @@ export default async function HomePage() {
 
   const accountRows = await listOwn('accounts', 'id,name');
   const accounts = accountRows.map((a) => ({ id: a.id, name: String(a.name) }));
-  const spending = await recentSpending(supabase, userId);
+  const recent = await listTransactions({ limit: 5 });
 
   return (
     <main className="mx-auto max-w-md px-6 py-10">
@@ -220,29 +198,50 @@ export default async function HomePage() {
         {timeline.length === 0 && <li className="py-3 text-sm text-muted">No upcoming events.</li>}
       </ul>
 
-      {spending.length > 0 && (
+      {recent.length > 0 && (
         <>
-          <h2 className="mt-8 text-lg font-semibold text-forest">Recent spending</h2>
+          <div className="mt-8 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-forest">Recent transactions</h2>
+            <Link href="/transactions" className="text-sm font-bold text-violet600">
+              View all
+            </Link>
+          </div>
           <ul className="mt-3 rounded-card bg-white/60 px-6 py-2 shadow-card">
-            {spending.map((sp) => (
-              <li
-                key={sp.id}
-                className="flex items-center justify-between gap-3 border-t border-sage/20 py-3 first:border-t-0"
-              >
-                <span className="w-14 shrink-0 text-xs text-muted">{sp.spent_date.slice(5)}</span>
-                <span className="flex-1 truncate text-ink">{sp.description ?? 'Expense'}</span>
-                <span className="text-ink">-{centsToDollars(sp.amount_cents)}</span>
-                <form action={removeExpense.bind(null, sp.id)}>
-                  <button className="text-xs text-terracotta">Undo</button>
-                </form>
-              </li>
-            ))}
+            {recent.map((t) => {
+              const positive = t.direction === 'income';
+              const amount = centsToDollars(t.amount_cents);
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-3 border-t border-sage/20 py-3 first:border-t-0"
+                >
+                  <span className="w-14 shrink-0 text-xs text-muted">{t.txn_date.slice(5)}</span>
+                  <span className="flex-1 truncate text-ink">
+                    {t.name ?? (t.direction === 'transfer' ? 'Transfer' : 'Transaction')}
+                    {t.status !== 'cleared' && (
+                      <span className="ml-2 text-xs text-muted">pending</span>
+                    )}
+                  </span>
+                  <span
+                    className={`font-num ${positive ? 'text-pos' : t.direction === 'transfer' ? 'text-ink' : 'text-neg'}`}
+                  >
+                    {positive ? '+' : t.direction === 'transfer' ? '' : '-'}
+                    {amount}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
 
       {accounts.length > 0 && (
-        <QuickAddExpense action={addExpense} accounts={accounts} today={clock.today} />
+        <QuickAdd
+          addTransaction={addTransaction}
+          setAccountBalance={setAccountBalance}
+          accounts={accounts}
+          today={clock.today}
+        />
       )}
     </main>
   );

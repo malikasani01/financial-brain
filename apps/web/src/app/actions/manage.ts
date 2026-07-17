@@ -168,6 +168,192 @@ export async function removeExpense(id: string): Promise<void> {
   refresh('/home');
 }
 
+// ---- Transactions ----------------------------------------------------------
+
+interface TxnMoney {
+  direction: string;
+  amount_cents: number;
+  account_id: string | null;
+  transfer_account_id: string | null;
+}
+
+/**
+ * Apply (sign +1) or reverse (sign -1) a transaction's effect on balances.
+ * Only called for CLEARED transactions — uncleared ones don't move money yet.
+ * Expense lowers the account; income raises it; a transfer moves between the
+ * two named accounts (net zero across total cash).
+ */
+async function moveBalance(
+  supabase: Supa,
+  userId: string,
+  t: TxnMoney,
+  sign: 1 | -1,
+): Promise<void> {
+  const amt = t.amount_cents * sign;
+  if (t.direction === 'income') {
+    await adjustAccountBalance(supabase, userId, t.account_id ?? '', amt);
+  } else if (t.direction === 'transfer') {
+    await adjustAccountBalance(supabase, userId, t.account_id ?? '', -amt);
+    await adjustAccountBalance(supabase, userId, t.transfer_account_id ?? '', amt);
+  } else {
+    await adjustAccountBalance(supabase, userId, t.account_id ?? '', -amt);
+  }
+}
+
+/** Record a transaction. Cleared ones adjust the balance immediately. */
+export async function addTransaction(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const amountCents = dollarsToCents(fd.get('amount'));
+  if (amountCents <= 0) return;
+
+  const direction = String(fd.get('direction') ?? 'expense');
+  const status = String(fd.get('status') ?? 'cleared');
+  const accountId = String(fd.get('account_id') ?? '') || null;
+  const transferAccountId =
+    direction === 'transfer' ? String(fd.get('transfer_account_id') ?? '') || null : null;
+  const txnDate = textOrNull(fd.get('txn_date')) ?? clock.today;
+
+  const { error } = await supabase.from('transactions').insert({
+    user_id: userId,
+    name: textOrNull(fd.get('name')),
+    amount_cents: amountCents,
+    direction,
+    category: textOrNull(fd.get('category')),
+    account_id: accountId,
+    transfer_account_id: transferAccountId,
+    txn_date: txnDate,
+    status,
+    cleared_date: status === 'cleared' ? txnDate : null,
+    note: textOrNull(fd.get('note')),
+  });
+  if (error) return; // table not migrated yet — don't touch balances
+
+  if (status === 'cleared') {
+    await moveBalance(
+      supabase,
+      userId,
+      { direction, amount_cents: amountCents, account_id: accountId, transfer_account_id: transferAccountId },
+      1,
+    );
+  }
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Flip a transaction between cleared and uncleared, moving the balance to match. */
+export async function toggleTransactionCleared(id: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('transactions')
+    .select('direction,amount_cents,account_id,transfer_account_id,status')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const row = data as (TxnMoney & { status: string }) | null;
+  if (!row) return;
+
+  const nowCleared = row.status !== 'cleared';
+  await moveBalance(supabase, userId, row, nowCleared ? 1 : -1);
+  await supabase
+    .from('transactions')
+    .update({
+      status: nowCleared ? 'cleared' : 'uncleared',
+      cleared_date: nowCleared ? new Date().toISOString().slice(0, 10) : null,
+    })
+    .eq('id', id)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Edit a transaction, reconciling any balance change (reverse old, apply new). */
+export async function editTransaction(id: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('transactions')
+    .select('direction,amount_cents,account_id,transfer_account_id,status,txn_date')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const old = data as (TxnMoney & { status: string }) | null;
+  if (!old) return;
+
+  const amountCents = dollarsToCents(fd.get('amount'));
+  if (amountCents <= 0) return;
+  const direction = String(fd.get('direction') ?? old.direction);
+  const status = String(fd.get('status') ?? old.status);
+  const accountId = String(fd.get('account_id') ?? '') || null;
+  const transferAccountId =
+    direction === 'transfer' ? String(fd.get('transfer_account_id') ?? '') || null : null;
+  const txnDate = textOrNull(fd.get('txn_date')) ?? clock.today;
+
+  if (old.status === 'cleared') await moveBalance(supabase, userId, old, -1);
+
+  await supabase
+    .from('transactions')
+    .update({
+      name: textOrNull(fd.get('name')),
+      amount_cents: amountCents,
+      direction,
+      category: textOrNull(fd.get('category')),
+      account_id: accountId,
+      transfer_account_id: transferAccountId,
+      txn_date: txnDate,
+      status,
+      cleared_date: status === 'cleared' ? txnDate : null,
+      note: textOrNull(fd.get('note')),
+    })
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (status === 'cleared') {
+    await moveBalance(
+      supabase,
+      userId,
+      { direction, amount_cents: amountCents, account_id: accountId, transfer_account_id: transferAccountId },
+      1,
+    );
+  }
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Delete a transaction, reversing its balance effect if it was cleared. */
+export async function deleteTransaction(id: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('transactions')
+    .select('direction,amount_cents,account_id,transfer_account_id,status,archived_at')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const row = data as (TxnMoney & { status: string; archived_at: string | null }) | null;
+  if (!row || row.archived_at) return;
+
+  if (row.status === 'cleared') await moveBalance(supabase, userId, row, -1);
+  await supabase
+    .from('transactions')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Set an account's balance outright (Quick Add → Update bank balance). */
+export async function setAccountBalance(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const accountId = String(fd.get('account_id') ?? '');
+  if (!accountId) return;
+  await supabase
+    .from('accounts')
+    .update({ balance_cents: dollarsToCents(fd.get('balance')), balance_updated_at: new Date().toISOString() })
+    .eq('id', accountId)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
 /** Choose which planning amount a life cost uses in the forecast (§38). */
 export async function setLifeCostPlanning(fd: FormData): Promise<void> {
   const { supabase, userId, clock } = await getSessionContext();

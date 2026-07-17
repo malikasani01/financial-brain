@@ -32,6 +32,7 @@ const ITEMS: NavItem[] = [
       '/subscriptions',
       '/life-costs',
       '/insights',
+      '/transactions',
       '/freedom',
       '/brain',
       '/settings',

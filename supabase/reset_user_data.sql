@@ -37,6 +37,10 @@ begin
   if to_regclass('public.spending_entries') is not null then
     delete from public.spending_entries where user_id = uid;
   end if;
+  -- transactions only exists once migration 0004 has been applied.
+  if to_regclass('public.transactions') is not null then
+    delete from public.transactions where user_id = uid;
+  end if;
   delete from public.obligation_payments       where user_id = uid;
   delete from public.goal_contributions        where user_id = uid;
   delete from public.business_scenarios        where user_id = uid;

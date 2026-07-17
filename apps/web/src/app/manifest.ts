@@ -6,6 +6,9 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Financial Brain',
     description: 'What money is truly safe for you to spend.',
     start_url: '/home',
+    scope: '/',
+    orientation: 'portrait',
+    categories: ['finance', 'productivity'],
     display: 'standalone',
     // Ink splash to match the icon tile; violet is the brand toolbar accent.
     background_color: '#14131A',

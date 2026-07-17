@@ -10,10 +10,14 @@ vi.mock('@fb/data', () => ({
 }));
 
 import {
+  addTransaction,
   archiveAndRecalc,
+  deleteTransaction,
   markIncomeReceived,
   recordObligationPayment,
+  setAccountBalance,
   setSubscriptionPaused,
+  toggleTransactionCleared,
 } from './manage';
 
 const CLOCK = { today: '2026-07-15', timezone: 'America/Denver' };
@@ -118,6 +122,96 @@ describe('archiveAndRecalc', () => {
     await archiveAndRecalc('subscriptions', 'sub1', '/subscriptions');
     const upd = m.calls.updates.find((u) => u.table === 'subscriptions')!.values!;
     expect(typeof upd.archived_at).toBe('string');
+    expect(recalculateFinancials).toHaveBeenCalledOnce();
+  });
+});
+
+// $2,000 starting balance; a transactions read returns `txn` when provided.
+const txnResolver =
+  (txn: Record<string, unknown> | null): Resolver =>
+  (table, method) => {
+    if (table === 'accounts' && method === 'maybeSingle') return { data: { balance_cents: 200000 }, error: null };
+    if (table === 'transactions' && method === 'maybeSingle') return { data: txn, error: null };
+    if (method === 'single') return { data: { id: `${table}-id` }, error: null };
+    if (method === 'maybeSingle') return { data: null, error: null };
+    return { data: [], error: null };
+  };
+
+const acctUpdates = (m: MockSupabase) =>
+  m.calls.updates.filter((u) => u.table === 'accounts').map((u) => u.values!.balance_cents);
+
+describe('addTransaction', () => {
+  it('records a cleared expense and lowers the account once', async () => {
+    const m = makeSupabase(balanceResolver);
+    use(m);
+    await addTransaction(
+      form({ direction: 'expense', amount: '40', status: 'cleared', account_id: 'a1', txn_date: '2026-07-20' }),
+    );
+    const txn = m.calls.inserts.find((c) => c.table === 'transactions')!.values!;
+    expect(txn).toMatchObject({ direction: 'expense', amount_cents: 4000, status: 'cleared' });
+    expect(acctUpdates(m)).toEqual([196000]); // 200,000 - 4,000, applied exactly once
+    expect(recalculateFinancials).toHaveBeenCalledOnce();
+  });
+
+  it('records an UNCLEARED expense without touching the balance', async () => {
+    const m = makeSupabase(balanceResolver);
+    use(m);
+    await addTransaction(
+      form({ direction: 'expense', amount: '40', status: 'uncleared', account_id: 'a1', txn_date: '2026-07-20' }),
+    );
+    expect(m.calls.inserts.find((c) => c.table === 'transactions')!.values!.status).toBe('uncleared');
+    expect(acctUpdates(m)).toEqual([]); // money hasn't moved yet
+  });
+
+  it('moves money between accounts on a cleared transfer, netting to zero', async () => {
+    const m = makeSupabase(balanceResolver);
+    use(m);
+    await addTransaction(
+      form({ direction: 'transfer', amount: '30', status: 'cleared', account_id: 'a1', transfer_account_id: 'a2' }),
+    );
+    // a1 -3,000 => 197,000 ; a2 +3,000 => 203,000 (both read 200,000)
+    expect(acctUpdates(m).sort()).toEqual([197000, 203000]);
+  });
+});
+
+describe('toggleTransactionCleared', () => {
+  it('applies the balance when clearing, and reverses it when un-clearing', async () => {
+    const clearing = makeSupabase(
+      txnResolver({ direction: 'expense', amount_cents: 5000, account_id: 'a1', transfer_account_id: null, status: 'uncleared' }),
+    );
+    use(clearing);
+    await toggleTransactionCleared('t1');
+    expect(acctUpdates(clearing)).toEqual([195000]); // 200,000 - 5,000
+    expect(clearing.calls.updates.find((u) => u.table === 'transactions')!.values!.status).toBe('cleared');
+
+    const unclearing = makeSupabase(
+      txnResolver({ direction: 'expense', amount_cents: 5000, account_id: 'a1', transfer_account_id: null, status: 'cleared' }),
+    );
+    use(unclearing);
+    await toggleTransactionCleared('t1');
+    expect(acctUpdates(unclearing)).toEqual([205000]); // 200,000 + 5,000 (reversed)
+    expect(unclearing.calls.updates.find((u) => u.table === 'transactions')!.values!.status).toBe('uncleared');
+  });
+});
+
+describe('deleteTransaction', () => {
+  it('reverses a cleared expense and archives it', async () => {
+    const m = makeSupabase(
+      txnResolver({ direction: 'expense', amount_cents: 4000, account_id: 'a1', transfer_account_id: null, status: 'cleared', archived_at: null }),
+    );
+    use(m);
+    await deleteTransaction('t1');
+    expect(acctUpdates(m)).toEqual([204000]); // refunded
+    expect(typeof m.calls.updates.find((u) => u.table === 'transactions')!.values!.archived_at).toBe('string');
+  });
+});
+
+describe('setAccountBalance', () => {
+  it('sets the balance outright and recalculates', async () => {
+    const m = makeSupabase(balanceResolver);
+    use(m);
+    await setAccountBalance(form({ account_id: 'a1', balance: '250' }));
+    expect(m.calls.updates.find((u) => u.table === 'accounts')!.values!.balance_cents).toBe(25000);
     expect(recalculateFinancials).toHaveBeenCalledOnce();
   });
 });

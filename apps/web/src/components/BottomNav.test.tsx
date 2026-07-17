@@ -20,7 +20,7 @@ describe('BottomNav', () => {
   it('renders all five destinations', () => {
     h.pathname = '/home';
     render(<BottomNav />);
-    for (const label of ['Home', 'Plan', 'Ask', 'Goals', 'Brain']) {
+    for (const label of ['Home', 'Calendar', 'Ask', 'Plan', 'More']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
   });
@@ -38,7 +38,14 @@ describe('BottomNav', () => {
     render(<BottomNav />);
     const plan = screen.getByText('Plan').closest('a')!;
     const home = screen.getByText('Home').closest('a')!;
-    expect(plan.className).toContain('font-semibold');
-    expect(home.className).not.toContain('font-semibold');
+    expect(plan.className).toContain('text-violet600');
+    expect(home.className).not.toContain('text-violet600');
+  });
+
+  it('lights up More for the secondary screens nested under it', () => {
+    h.pathname = '/goals';
+    render(<BottomNav />);
+    const more = screen.getByText('More').closest('a')!;
+    expect(more.className).toContain('text-violet600');
   });
 });

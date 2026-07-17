@@ -2,36 +2,65 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Icon, type IconName } from '@/components/Icon';
 
 interface NavItem {
   href: string;
   label: string;
+  icon: IconName;
   center?: boolean;
+  /** Extra path prefixes that should light this tab up as active. */
+  match?: string[];
 }
 
 const ITEMS: NavItem[] = [
-  { href: '/home', label: 'Home' },
-  { href: '/plan', label: 'Plan' },
-  { href: '/ask', label: 'Ask', center: true },
-  { href: '/goals', label: 'Goals' },
-  { href: '/brain', label: 'Brain' },
+  { href: '/home', label: 'Home', icon: 'house' },
+  { href: '/calendar', label: 'Calendar', icon: 'calendar' },
+  { href: '/ask', label: 'Ask', icon: 'chat', center: true },
+  { href: '/plan', label: 'Plan', icon: 'plan' },
+  {
+    href: '/more',
+    label: 'More',
+    icon: 'dots',
+    // The secondary screens live under More.
+    match: [
+      '/goals',
+      '/priorities',
+      '/accounts',
+      '/income',
+      '/obligations',
+      '/subscriptions',
+      '/life-costs',
+      '/insights',
+      '/freedom',
+      '/brain',
+      '/settings',
+    ],
+  },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
+  const isActive = (item: NavItem) =>
+    pathname === item.href ||
+    pathname.startsWith(`${item.href}/`) ||
+    (item.match?.some((m) => pathname === m || pathname.startsWith(`${m}/`)) ?? false);
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-sage/20 bg-cream/95 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-md items-end justify-around px-4 py-2">
         {ITEMS.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = isActive(item);
           if (item.center) {
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="-mt-6 flex h-16 w-16 flex-col items-center justify-center rounded-full bg-forest text-cream shadow-card"
+                aria-label={item.label}
+                className="-mt-6 flex h-16 w-16 flex-col items-center justify-center rounded-full bg-violet500 text-white shadow-card"
               >
-                <span className="text-sm font-medium">{item.label}</span>
+                <Icon name={item.icon} size={24} />
+                <span className="mt-0.5 text-[11px] font-bold">{item.label}</span>
               </Link>
             );
           }
@@ -39,10 +68,11 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center py-2 text-sm ${
-                active ? 'font-semibold text-forest' : 'text-muted'
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-bold ${
+                active ? 'text-violet600' : 'text-ink600'
               }`}
             >
+              <Icon name={item.icon} size={24} />
               {item.label}
             </Link>
           );

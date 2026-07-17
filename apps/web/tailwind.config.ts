@@ -22,13 +22,13 @@ const config: Config = {
         ink900: '#14131A',
         ink600: '#5B5868',
         line: '#E7E4DE',
-        violet: {
-          100: '#EEE9FF',
-          300: '#C9BFFF',
-          500: '#6C4CFF',
-          600: '#5636E0',
-          DEFAULT: '#6C4CFF',
-        },
+        // Flat keys (not a nested scale) so the utility is `bg-violet500`, matching
+        // how the components are written — a nested scale would require `bg-violet-500`.
+        violet100: '#EEE9FF',
+        violet300: '#C9BFFF',
+        violet500: '#6C4CFF',
+        violet600: '#5636E0',
+        violet: '#6C4CFF',
         // Money meaning ONLY.
         pos: '#1FAE6B',
         neg: '#E4523F',

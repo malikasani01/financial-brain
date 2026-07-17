@@ -195,28 +195,42 @@ export default async function PlanPage() {
                 {p.lines.length === 0 && (
                   <li className="py-3 text-sm text-muted">Nothing due this period.</li>
                 )}
-                {p.lines.map((l, li) => (
-                  <li
-                    key={`${l.sourceId}-${l.date}-${li}`}
-                    className={`flex items-center justify-between gap-2 border-t border-sage/20 py-3 first:border-t-0 ${
-                      l.negative ? 'text-terracotta' : l.belowBuffer ? 'text-amber-700' : 'text-ink'
-                    }`}
-                  >
-                    <span className="w-14 shrink-0 text-xs text-muted">
-                      {overdueIds.has(l.sourceId) ? 'now' : l.date.slice(5)}
-                    </span>
-                    <span className="flex-1 truncate">
-                      {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
-                      <span className="ml-2 text-xs text-muted">
-                        {overdueIds.has(l.sourceId) ? 'overdue — due now' : KIND_LABEL[l.kind]}
-                      </span>
-                    </span>
-                    <span className="shrink-0 tabular-nums">{centsToDollars(l.amountCents)}</span>
-                    <span className="w-20 shrink-0 text-right font-medium tabular-nums">
-                      {centsToDollars(l.runningCents)}
-                    </span>
-                  </li>
-                ))}
+                {p.lines.map((l, li) => {
+                  const overdue = overdueIds.has(l.sourceId);
+                  return (
+                    <li
+                      key={`${l.sourceId}-${l.date}-${li}`}
+                      className="border-t border-sage/20 py-3 first:border-t-0"
+                    >
+                      {/* Line 1: what it is + how much */}
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="min-w-0 flex-1 truncate font-medium text-ink900">
+                          {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
+                        </span>
+                        <span
+                          className={`shrink-0 font-num font-semibold ${
+                            l.negative ? 'text-neg' : 'text-ink900'
+                          }`}
+                        >
+                          {centsToDollars(l.amountCents)}
+                        </span>
+                      </div>
+                      {/* Line 2: when + type · running balance */}
+                      <div className="mt-0.5 flex items-center justify-between gap-3 text-xs text-ink600">
+                        <span className="truncate">
+                          {overdue ? 'Overdue — due now' : l.date} · {KIND_LABEL[l.kind]}
+                        </span>
+                        <span
+                          className={`shrink-0 font-num ${
+                            l.negative ? 'text-neg' : l.belowBuffer ? 'text-warn' : 'text-ink600'
+                          }`}
+                        >
+                          Balance {centsToDollars(l.runningCents)}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );

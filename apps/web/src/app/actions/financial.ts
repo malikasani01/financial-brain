@@ -330,6 +330,22 @@ export async function quickUpdateBalances(fd: FormData): Promise<void> {
   revalidatePath('/home', 'layout');
 }
 
+/**
+ * Set the safety buffer the engine protects (the cash kept in reserve before
+ * anything counts as available or safe to save). A blank value clears the
+ * override so the stage-based recommendation applies again.
+ */
+export async function setSafetyBuffer(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const cents = dollarsToCentsOrNull(fd.get('buffer'));
+  await supabase
+    .from('user_preferences')
+    .update({ safety_buffer_override_cents: cents })
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  revalidatePath('/home', 'layout');
+}
+
 // ---- Ask Before I Spend ----------------------------------------------------
 
 /** Run the deterministic decision engine on a proposed purchase, persist it, show the result. */

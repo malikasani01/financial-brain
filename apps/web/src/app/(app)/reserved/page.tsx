@@ -20,14 +20,14 @@ const KIND_LABEL: Record<CashEvent['kind'], string> = {
 };
 
 export default async function ReservedPage() {
-  const { input } = await loadEngineView();
-  const reserved = reservedForBills(input);
-
-  const [subRows, lifeRows, txns] = await Promise.all([
+  // One concurrent wave: the engine view and the name/txn reads fire together.
+  const [{ input }, subRows, lifeRows, txns] = await Promise.all([
+    loadEngineView(),
     listOwn('subscriptions', 'id,name'),
     listOwn('life_cost_categories', 'id,category'),
     listTransactions({ limit: 200 }),
   ]);
+  const reserved = reservedForBills(input);
   const nameById = new Map<string, string>();
   for (const o of input.obligations) nameById.set(o.id, o.name);
   for (const g of input.goals) nameById.set(g.id, g.name);

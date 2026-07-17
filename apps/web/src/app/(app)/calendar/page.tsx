@@ -41,20 +41,20 @@ export default async function CalendarPage({
 }: {
   searchParams: Promise<{ m?: string; d?: string }>;
 }) {
-  const { m, d } = await searchParams;
-  const { input, output, clock } = await loadEngineView();
+  // One concurrent wave: search params, the engine view, and the name/txn
+  // reads all resolve together.
+  const [{ m, d }, { input, output, clock }, subRows, incomeRows, txns] = await Promise.all([
+    searchParams,
+    loadEngineView(),
+    listOwn('subscriptions', 'id,name'),
+    listOwn('income_sources', 'id,name'),
+    listTransactions({ limit: 300 }),
+  ]);
   const today = clock.today;
 
   const monthStr = /^\d{4}-\d{2}$/.test(m ?? '') ? m! : today.slice(0, 7);
   const [year, month] = monthStr.split('-').map(Number);
   const selected = /^\d{4}-\d{2}-\d{2}$/.test(d ?? '') ? d! : today;
-
-  // Names + per-day scheduled events (from the forecast stream).
-  const [subRows, incomeRows, txns] = await Promise.all([
-    listOwn('subscriptions', 'id,name'),
-    listOwn('income_sources', 'id,name'),
-    listTransactions({ limit: 300 }),
-  ]);
   const nameById = new Map<string, string>();
   for (const o of input.obligations) nameById.set(o.id, o.name);
   for (const g of input.goals) nameById.set(g.id, g.name);

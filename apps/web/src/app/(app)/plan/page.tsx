@@ -39,21 +39,22 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 };
 
 export default async function PlanPage() {
-  const { input, output, clock } = await loadEngineView();
+  // One concurrent wave: the engine view and every independent read fire
+  // together. The real names below map each event's sourceId back to a human
+  // name (events only carry ids).
+  const [{ input, output, clock }, subRows, lifeRows, goalRows, incomeRows, accountRows, txns] =
+    await Promise.all([
+      loadEngineView(),
+      listOwn('subscriptions', 'id,name'),
+      listOwn('life_cost_categories', 'id,category'),
+      listOwn('goals', 'id,name'),
+      listOwn('income_sources', 'id,name,net_amount_cents,frequency,confidence'),
+      listOwn('accounts', 'id,name'),
+      listTransactions({ limit: 500 }),
+    ]);
   const s = output.safeToSpend;
   const ledger = buildPaycheckLedger(input);
   const advice = advisePaycheckPeriods(input, ledger);
-
-  // Real names for the ledger and the "potential extra income" list — events
-  // only carry a sourceId, so map each id back to its human name.
-  const [subRows, lifeRows, goalRows, incomeRows, accountRows, txns] = await Promise.all([
-    listOwn('subscriptions', 'id,name'),
-    listOwn('life_cost_categories', 'id,category'),
-    listOwn('goals', 'id,name'),
-    listOwn('income_sources', 'id,name,net_amount_cents,frequency,confidence'),
-    listOwn('accounts', 'id,name'),
-    listTransactions({ limit: 500 }),
-  ]);
   const nameById = new Map<string, string>();
   for (const o of input.obligations) nameById.set(o.id, o.name);
   for (const g of goalRows) nameById.set(g.id, String(g.name));

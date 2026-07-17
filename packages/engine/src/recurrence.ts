@@ -8,7 +8,7 @@
  */
 
 import type { Frequency, ISODate } from '@fb/types';
-import { addDays, addMonths, compareDate } from './dateutil.js';
+import { addDays, addMonths, compareDate, daysInMonth } from './dateutil.js';
 
 /** Inclusive window [start, start + horizonDays - 1]. */
 export function expandOccurrences(
@@ -74,17 +74,31 @@ function stepByMonths(anchor: ISODate, step: number, start: ISODate, end: ISODat
   return out;
 }
 
-/** Twice per month: the anchor's day and ~15 days later, month over month. */
+/**
+ * Twice per month on two FIXED days of the month (e.g. the 5th and the 20th),
+ * so paydays don't drift and land on the same dates every month. The two days
+ * are the anchor's day and its half-month partner (15 apart) — anchor on the
+ * 20th → the 5th and 20th; on the 1st → the 1st and 16th. Days past a shorter
+ * month's length clamp to that month's last day.
+ */
 function stepSemimonthly(anchor: ISODate, start: ISODate, end: ISODate): ISODate[] {
-  const dates = new Set<ISODate>();
-  let k = 0;
-  // Walk months from the anchor; for each, add day and day+15 (clamped by addDays).
-  while (true) {
-    const monthStart = addMonths(anchor, k);
-    if (compareDate(monthStart, end) > 0) break;
-    dates.add(monthStart);
-    dates.add(addDays(monthStart, 15));
-    k += 1;
+  const anchorDay = Number(anchor.slice(8, 10));
+  const partner = anchorDay > 15 ? anchorDay - 15 : anchorDay + 15;
+  const days = [Math.min(anchorDay, partner), Math.max(anchorDay, partner)];
+
+  const out: ISODate[] = [];
+  // Walk each month overlapping the window, emitting both fixed days.
+  let cursor: ISODate = `${start.slice(0, 7)}-01`;
+  while (compareDate(cursor, end) <= 0) {
+    const year = Number(cursor.slice(0, 4));
+    const month = Number(cursor.slice(5, 7));
+    const lastDay = daysInMonth(year, month);
+    for (const day of days) {
+      const dd = Math.min(day, lastDay);
+      const iso: ISODate = `${cursor.slice(0, 7)}-${String(dd).padStart(2, '0')}`;
+      if (compareDate(iso, start) >= 0 && compareDate(iso, end) <= 0) out.push(iso);
+    }
+    cursor = addMonths(cursor, 1);
   }
-  return [...dates].filter((d) => compareDate(d, start) >= 0 && compareDate(d, end) <= 0).sort();
+  return out.sort();
 }

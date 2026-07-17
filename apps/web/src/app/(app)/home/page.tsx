@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { CashEvent, GoalInput } from '@fb/types';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays } from '@fb/engine';
 import { loadEngineView } from '@/lib/engine-view';
+import { getSessionContext } from '@/lib/session';
 import { listOwn } from '@/lib/db';
 import { listTransactions, listExpenseCategories } from '@/lib/transactions';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
@@ -35,11 +35,9 @@ function greeting(tz: string): string {
 }
 
 /** Whole days since the most recently updated account balance (PRD §55). */
-async function oldestBalanceAgeDays(
-  supabase: SupabaseClient,
-  userId: string,
-  today: string,
-): Promise<number | null> {
+async function oldestBalanceAgeDays(): Promise<number | null> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const today = clock.today;
   const { data } = await supabase
     .from('accounts')
     .select('balance_updated_at')
@@ -70,7 +68,26 @@ const GOAL_STATUS: Record<string, { label: string; tone: 'pos' | 'warn' | 'neg' 
 };
 
 export default async function HomePage() {
-  const { output, input, clock, supabase, userId } = await loadEngineView();
+  // One concurrent wave: the engine view and every independent read fire
+  // together instead of in sequence, so the page paints after a single
+  // round-trip's worth of latency rather than five stacked ones.
+  const [
+    { output, input, clock },
+    staleDays,
+    subRows,
+    incomeRows,
+    accountRows,
+    recent,
+    { categories: usedCategories, lastUsed },
+  ] = await Promise.all([
+    loadEngineView(),
+    oldestBalanceAgeDays(),
+    listOwn('subscriptions', 'id,name'),
+    listOwn('income_sources', 'id,name'),
+    listOwn('accounts', 'id,name'),
+    listTransactions({ limit: 5 }),
+    listExpenseCategories(),
+  ]);
   const s = output.safeToSpend;
   const today = clock.today;
 
@@ -95,14 +112,8 @@ export default async function HomePage() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
   const urgentCount = nextMoves.filter((u) => u.score >= 70).length;
-  const staleDays = await oldestBalanceAgeDays(supabase, userId, today);
 
   // --- Names for events, then This Week + Upcoming bills ---
-  const [subRows, incomeRows, accountRows] = await Promise.all([
-    listOwn('subscriptions', 'id,name'),
-    listOwn('income_sources', 'id,name'),
-    listOwn('accounts', 'id,name'),
-  ]);
   const nameById = new Map<string, string>();
   for (const o of input.obligations) nameById.set(o.id, o.name);
   for (const g of input.goals) nameById.set(g.id, g.name);
@@ -126,8 +137,6 @@ export default async function HomePage() {
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .slice(0, 5);
 
-  const recent = await listTransactions({ limit: 5 });
-
   // Category choices: the user's own (remembered), then the standard set.
   const DEFAULT_CATEGORIES = [
     'Housing',
@@ -140,7 +149,6 @@ export default async function HomePage() {
     'Business',
     'Other',
   ];
-  const { categories: usedCategories, lastUsed } = await listExpenseCategories();
   const categoryOptions = [...new Set([...usedCategories, ...DEFAULT_CATEGORIES])];
   const defaultCategory = lastUsed ?? 'Other';
 

@@ -47,13 +47,17 @@ export default async function InsightsPage({
 }: {
   searchParams: Promise<{ p?: string }>;
 }) {
-  const { p } = await searchParams;
+  // One concurrent wave: search params, the engine view, and the transactions
+  // all resolve together instead of in sequence.
+  const [{ p }, { output, clock }, txns] = await Promise.all([
+    searchParams,
+    loadEngineView(),
+    listTransactions({ limit: 1000 }),
+  ]);
   const period = (PERIODS.find((x) => x.key === p)?.key ?? 'month') as PeriodKey;
-  const { output, clock } = await loadEngineView();
   const today = clock.today;
   const w = windowFor(period, today);
 
-  const txns = await listTransactions({ limit: 1000 });
   const inWindow = txns.filter(
     (t) => t.status === 'cleared' && t.txn_date >= w.start && t.txn_date <= w.end,
   );

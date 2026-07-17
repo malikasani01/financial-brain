@@ -46,12 +46,25 @@ describe('expandOccurrences', () => {
     expect(out).toEqual(['2026-03-15', '2026-04-15', '2026-05-15']);
   });
 
-  it('SEMIMONTHLY: twice per month', () => {
+  it('SEMIMONTHLY: twice per month on fixed days (anchor on the 1st → 1st & 16th)', () => {
     const out = expandOccurrences('2026-07-01', 'SEMIMONTHLY', '2026-07-01', 62);
     expect(out).toContain('2026-07-01');
     expect(out).toContain('2026-07-16');
     expect(out).toContain('2026-08-01');
     // ascending & de-duplicated
     expect([...out].sort()).toEqual(out);
+  });
+
+  it('SEMIMONTHLY: anchor on the 20th pays the 5th and 20th every month, no drift', () => {
+    const out = expandOccurrences('2026-07-20', 'SEMIMONTHLY', '2026-07-15', 90);
+    // The 5th before the start window is skipped; 20th onward lands on fixed days.
+    expect(out).toEqual(['2026-07-20', '2026-08-05', '2026-08-20', '2026-09-05', '2026-09-20', '2026-10-05']);
+  });
+
+  it('SEMIMONTHLY: clamps a day past a short month to its last day', () => {
+    const out = expandOccurrences('2026-01-31', 'SEMIMONTHLY', '2026-01-01', 90);
+    // Days {16, 31}; February clamps 31 → 28.
+    expect(out).toContain('2026-02-28');
+    expect(out).toContain('2026-02-16');
   });
 });

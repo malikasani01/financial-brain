@@ -340,6 +340,44 @@ export async function deleteTransaction(id: string): Promise<void> {
   refresh('/home');
 }
 
+/**
+ * Log money actually moved to savings toward a goal. It counts toward the goal
+ * (raises saved, lowering how much is still needed) and leaves the chosen
+ * account (lowering available cash), so the next savings recommendation is
+ * reduced accordingly. Also records a contribution for history.
+ */
+export async function saveToGoal(fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const goalId = String(fd.get('goal_id') ?? '');
+  const amountCents = dollarsToCents(fd.get('amount'));
+  if (!goalId || amountCents <= 0) return;
+  const accountId = String(fd.get('account_id') ?? '');
+
+  const { data } = await supabase
+    .from('goals')
+    .select('saved_cents')
+    .eq('id', goalId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const saved = (data?.saved_cents as number | undefined) ?? 0;
+  await supabase
+    .from('goals')
+    .update({ saved_cents: saved + amountCents })
+    .eq('id', goalId)
+    .eq('user_id', userId);
+
+  if (accountId) await adjustAccountBalance(supabase, userId, accountId, -amountCents);
+
+  await supabase.from('goal_contributions').insert({
+    user_id: userId,
+    goal_id: goalId,
+    amount_cents: amountCents,
+    contribution_date: clock.today,
+  });
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
 /** Set an account's balance outright (Quick Add → Update bank balance). */
 export async function setAccountBalance(fd: FormData): Promise<void> {
   const { supabase, userId, clock } = await getSessionContext();

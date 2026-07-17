@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays } from '@fb/engine';
 import { loadEngineView } from '@/lib/engine-view';
 import { listOwn } from '@/lib/db';
-import { listTransactions } from '@/lib/transactions';
+import { listTransactions, listExpenseCategories } from '@/lib/transactions';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 import { Badge, Logo, Money } from '@/components/brand';
@@ -127,6 +127,22 @@ export default async function HomePage() {
     .slice(0, 5);
 
   const recent = await listTransactions({ limit: 5 });
+
+  // Category choices: the user's own (remembered), then the standard set.
+  const DEFAULT_CATEGORIES = [
+    'Housing',
+    'Auto & Transport',
+    'Bills & Utilities',
+    'Groceries',
+    'Dining Out',
+    'Health',
+    'Personal',
+    'Business',
+    'Other',
+  ];
+  const { categories: usedCategories, lastUsed } = await listExpenseCategories();
+  const categoryOptions = [...new Set([...usedCategories, ...DEFAULT_CATEGORIES])];
+  const defaultCategory = lastUsed ?? 'Other';
 
   const goals = input.goals
     .map((g: GoalInput) => ({
@@ -354,6 +370,8 @@ export default async function HomePage() {
           addTransaction={addTransaction}
           setAccountBalance={setAccountBalance}
           accounts={accounts}
+          categories={categoryOptions}
+          defaultCategory={defaultCategory}
           today={today}
         />
       )}

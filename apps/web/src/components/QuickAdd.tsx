@@ -13,17 +13,7 @@ interface Account {
 
 type Kind = 'expense' | 'income' | 'transfer' | 'balance';
 
-const CATEGORIES = [
-  'Housing',
-  'Auto & Transport',
-  'Bills & Utilities',
-  'Groceries',
-  'Dining Out',
-  'Health',
-  'Personal',
-  'Business',
-  'Other',
-];
+const NEW = '__new__';
 
 const field =
   'mt-1 w-full rounded-input border border-line bg-white px-4 py-3 outline-none focus:border-violet500';
@@ -35,7 +25,7 @@ function SubmitButton({ children }: { children: ReactNode }) {
     <button
       type="submit"
       disabled={pending}
-      className="mt-1 rounded-button bg-violet500 px-5 py-3 font-bold text-white disabled:opacity-60"
+      className="mt-1 w-full rounded-button bg-violet500 px-5 py-4 text-center font-bold text-white shadow-card disabled:opacity-60"
     >
       {pending ? 'Saving…' : children}
     </button>
@@ -46,22 +36,30 @@ export function QuickAdd({
   addTransaction,
   setAccountBalance,
   accounts,
+  categories,
+  defaultCategory,
   today,
 }: {
   addTransaction: (fd: FormData) => Promise<void>;
   setAccountBalance: (fd: FormData) => Promise<void>;
   accounts: Account[];
+  categories: string[];
+  defaultCategory: string;
   today: string;
 }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>('expense');
   const [cleared, setCleared] = useState(true);
+  const [category, setCategory] = useState(defaultCategory);
+  const [customCategory, setCustomCategory] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
 
   const close = () => setOpen(false);
   const submit = (action: (fd: FormData) => Promise<void>) => async (fd: FormData) => {
     await action(fd);
     formRef.current?.reset();
+    setCategory(defaultCategory);
+    setCustomCategory('');
     setOpen(false);
   };
 
@@ -84,6 +82,8 @@ export function QuickAdd({
       </select>
     </label>
   );
+
+  const effectiveCategory = category === NEW ? customCategory.trim() : category;
 
   return (
     <>
@@ -129,10 +129,11 @@ export function QuickAdd({
           <form ref={formRef} action={submit(addTransaction)} className="grid gap-3">
             <input type="hidden" name="direction" value={kind} />
             <input type="hidden" name="status" value={cleared ? 'cleared' : 'uncleared'} />
+            {kind === 'expense' && <input type="hidden" name="category" value={effectiveCategory} />}
 
             <label className={label}>
               Amount
-              <input name="amount" inputMode="decimal" required autoFocus placeholder="$0.00" className={field} />
+              <input name="amount" inputMode="decimal" required placeholder="$0.00" className={field} />
             </label>
 
             {kind !== 'transfer' && (
@@ -147,16 +148,32 @@ export function QuickAdd({
             )}
 
             {kind === 'expense' && (
-              <label className={label}>
-                Category
-                <select name="category" defaultValue="Other" className={field}>
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div>
+                <label className={label}>
+                  Category
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className={field}
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    <option value={NEW}>+ New category…</option>
+                  </select>
+                </label>
+                {category === NEW && (
+                  <input
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    placeholder="New category name"
+                    className={`${field} mt-2`}
+                    autoFocus
+                  />
+                )}
+              </div>
             )}
 
             {kind === 'transfer' ? (
@@ -165,7 +182,9 @@ export function QuickAdd({
                 <AccountSelect name="transfer_account_id" label="To account" />
               </>
             ) : (
-              accounts.length > 1 && <AccountSelect name="account_id" label={kind === 'income' ? 'Into account' : 'Paid from'} />
+              accounts.length > 1 && (
+                <AccountSelect name="account_id" label={kind === 'income' ? 'Into account' : 'Paid from'} />
+              )
             )}
             {kind !== 'transfer' && accounts.length === 1 && (
               <input type="hidden" name="account_id" value={accounts[0]!.id} />

@@ -47,3 +47,34 @@ export async function listTransactions(filter: TransactionFilter = {}): Promise<
   if (error) return [];
   return (data ?? []) as TransactionRow[];
 }
+
+/**
+ * The expense categories this user has actually used, most-recent first, so
+ * custom categories are remembered and offered again. `lastUsed` is the
+ * category of their most recent expense (a good default). Resilient to the
+ * table not existing yet.
+ */
+export async function listExpenseCategories(): Promise<{ categories: string[]; lastUsed: string | null }> {
+  const { supabase, userId } = await getSessionContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('category,created_at')
+    .eq('user_id', userId)
+    .eq('direction', 'expense')
+    .is('archived_at', null)
+    .not('category', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error || !data) return { categories: [], lastUsed: null };
+
+  const seen = new Set<string>();
+  const categories: string[] = [];
+  for (const r of data as { category: string | null }[]) {
+    const c = r.category?.trim();
+    if (c && !seen.has(c)) {
+      seen.add(c);
+      categories.push(c);
+    }
+  }
+  return { categories, lastUsed: categories[0] ?? null };
+}

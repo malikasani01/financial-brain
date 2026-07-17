@@ -1,12 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Every screen is force-dynamic (financial data must never be stale), but
-  // the client Router Cache still reuses a soft-navigated page's RSC payload
-  // for staleTimes.dynamic seconds (default 30s) regardless of that. Zero it
-  // out so every <Link> navigation always refetches live from the server.
+  // Short-lived client Router Cache so returning to a recently-viewed tab is
+  // instant instead of a full server round-trip every time. Freshness is safe:
+  // every mutation calls revalidatePath('/home','layout'), invalidating the
+  // whole (app) subtree, so edits always refetch. 30s only affects navigation
+  // between edits, when nothing has changed.
   experimental: {
-    staleTimes: { dynamic: 0, static: 0 },
+    staleTimes: { dynamic: 30, static: 180 },
   },
   // Workspace packages ship raw TypeScript; Next transpiles them.
   transpilePackages: ['@fb/types', '@fb/engine', '@fb/data', '@fb/ai'],

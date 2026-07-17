@@ -36,6 +36,7 @@ import type {
   PlannedPurchaseRow,
   RawFinancialData,
   SubscriptionRow,
+  TransactionRow,
 } from './rows.js';
 
 const active = <T extends { archived_at: string | null }>(rows: T[]): T[] =>
@@ -181,6 +182,36 @@ function plannedPurchaseEvents(
   return out;
 }
 
+/**
+ * Not-yet-cleared manual expenses become future outflows in the forecast, so a
+ * known upcoming spend lowers Safe to Spend. CLEARED transactions are skipped —
+ * their money already left the account, so it's already in the balance (double
+ * counting would otherwise occur). Income/transfers are skipped too: uncleared
+ * income must not inflate the conservative number, and a transfer nets to zero.
+ * A past-dated uncleared expense posts today (it still needs covering now).
+ */
+function transactionEvents(
+  rows: TransactionRow[],
+  clock: Clock,
+): CashEvent[] {
+  const out: CashEvent[] = [];
+  for (const t of active(rows)) {
+    if (t.status === 'cleared') continue;
+    if (t.direction !== 'expense') continue;
+    if (t.amount_cents <= 0) continue;
+    const date = t.txn_date < clock.today ? clock.today : t.txn_date;
+    out.push({
+      date,
+      amountCents: -t.amount_cents,
+      kind: 'MANUAL',
+      sourceId: t.id,
+      confidence: 'CONFIRMED',
+      isEssential: false,
+    });
+  }
+  return out;
+}
+
 function toLifeCostInput(r: LifeCostRow): LifeCostInput {
   return {
     id: r.id,
@@ -268,6 +299,7 @@ export function normalizeToEngineInput(
     ...subscriptionEvents(raw.subscriptions, clock, horizonDays),
     ...committedGoalEvents(raw.goals, fundingDates),
     ...plannedPurchaseEvents(raw.plannedPurchases, clock, horizonDays),
+    ...transactionEvents(raw.transactions ?? [], clock),
   ];
 
   return {

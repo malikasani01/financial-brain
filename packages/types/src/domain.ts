@@ -15,7 +15,15 @@ import type {
 } from './enums.js';
 
 export type CashEventKind =
-  'INCOME' | 'OBLIGATION' | 'LIFE_COST' | 'SUBSCRIPTION' | 'GOAL_CONTRIBUTION' | 'PLANNED_PURCHASE';
+  | 'INCOME'
+  | 'OBLIGATION'
+  | 'LIFE_COST'
+  | 'SUBSCRIPTION'
+  | 'GOAL_CONTRIBUTION'
+  | 'PLANNED_PURCHASE'
+  // A manually-entered, not-yet-cleared transaction (a one-off expense the user
+  // logged that hasn't hit the bank yet).
+  | 'MANUAL';
 
 /**
  * A single dated cash movement in the forecast. `+` = inflow, `-` = outflow.

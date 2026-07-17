@@ -143,6 +143,33 @@ export interface PeriodAdvice {
   trims: PeriodTrim[];
 }
 
+// ---- Reserved for bills ----------------------------------------------------
+
+/** One committed outflow making up the Reserved-for-Bills total. */
+export interface ReservedItem {
+  sourceId: string;
+  kind: CashEventKind;
+  date: ISODate;
+  /** Positive reserved amount (the outflow's magnitude). */
+  amountCents: Cents;
+}
+
+/**
+ * Money already committed to required future outflows, summed over windows.
+ * Derived from the same conservative event stream as the forecast, so it
+ * always reconciles with Safe to Spend.
+ */
+export interface ReservedForBills {
+  thisWeekCents: Cents;
+  untilPaydayCents: Cents;
+  thisMonthCents: Cents;
+  horizonCents: Cents;
+  /** Whether a confirmed paycheck exists within the horizon (drives labelling). */
+  hasPayday: boolean;
+  /** Every committed outflow in the horizon, ascending by date. */
+  items: ReservedItem[];
+}
+
 // ---- Financial stage & buffer ---------------------------------------------
 
 export interface StageResult {

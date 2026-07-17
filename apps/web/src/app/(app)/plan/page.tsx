@@ -15,6 +15,7 @@ const KIND_LABEL: Record<CashEvent['kind'], string> = {
   SUBSCRIPTION: 'Subscription',
   GOAL_CONTRIBUTION: 'Goal',
   PLANNED_PURCHASE: 'Planned purchase',
+  MANUAL: 'Expense',
 };
 
 /** How each non-confirmed reliability reads to the user. */

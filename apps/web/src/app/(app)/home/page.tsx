@@ -58,6 +58,7 @@ const KIND_LABEL: Record<CashEvent['kind'], string> = {
   SUBSCRIPTION: 'Subscription',
   GOAL_CONTRIBUTION: 'Goal',
   PLANNED_PURCHASE: 'Planned purchase',
+  MANUAL: 'Expense',
 };
 
 const GOAL_STATUS: Record<string, { label: string; tone: 'pos' | 'warn' | 'neg' | 'neutral' }> = {
@@ -175,7 +176,7 @@ export default async function HomePage() {
 
         <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
           <Stat label="Bank" cents={bankCents} />
-          <Stat label="Reserved" cents={reservedCents} />
+          <Stat label="Reserved" cents={reservedCents} href="/reserved" />
           <Stat label="Buffer" cents={s.safetyBufferCents} />
         </div>
 
@@ -360,13 +361,17 @@ export default async function HomePage() {
   );
 }
 
-function Stat({ label, cents }: { label: string; cents: number }) {
-  return (
-    <div>
-      <p className="text-xs text-ink600">{label}</p>
+function Stat({ label, cents, href }: { label: string; cents: number; href?: string }) {
+  const body = (
+    <>
+      <p className="text-xs text-ink600">
+        {label}
+        {href && <span className="ml-1 text-violet600">›</span>}
+      </p>
       <p className="mt-0.5 font-num text-sm font-bold text-ink900">{centsToWholeDollars(cents)}</p>
-    </div>
+    </>
   );
+  return href ? <Link href={href}>{body}</Link> : <div>{body}</div>;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

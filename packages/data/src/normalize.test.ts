@@ -265,4 +265,32 @@ describe('normalizeToEngineInput', () => {
     expect(out.safeToSpend.safeToSpendCents).toBeGreaterThanOrEqual(0);
     expect(out.stage.stage).toBeDefined();
   });
+
+  it('turns an uncleared expense into a forecast outflow; skips cleared/income/transfer/archived', () => {
+    const data = raw({
+      transactions: [
+        { id: 't1', amount_cents: 5000, direction: 'expense', txn_date: '2026-07-20', status: 'uncleared', archived_at: null },
+        { id: 't2', amount_cents: 9900, direction: 'expense', txn_date: '2026-07-22', status: 'cleared', archived_at: null }, // already in balance
+        { id: 't3', amount_cents: 8000, direction: 'income', txn_date: '2026-07-25', status: 'uncleared', archived_at: null }, // conservative: skip
+        { id: 't4', amount_cents: 4000, direction: 'transfer', txn_date: '2026-07-25', status: 'uncleared', archived_at: null }, // nets zero
+        { id: 't5', amount_cents: 3000, direction: 'expense', txn_date: '2026-07-25', status: 'uncleared', archived_at: '2026-07-16' }, // archived
+      ],
+    });
+    const ev = eventsOf(data, 'MANUAL');
+    expect(ev).toHaveLength(1);
+    expect(ev[0]!.sourceId).toBe('t1');
+    expect(ev[0]!.amountCents).toBe(-5000);
+    expect(ev[0]!.date).toBe('2026-07-20');
+  });
+
+  it('posts a past-dated uncleared expense at today (still needs covering now)', () => {
+    const data = raw({
+      transactions: [
+        { id: 'old', amount_cents: 2500, direction: 'expense', txn_date: '2026-07-01', status: 'uncleared', archived_at: null },
+      ],
+    });
+    const ev = eventsOf(data, 'MANUAL');
+    expect(ev).toHaveLength(1);
+    expect(ev[0]!.date).toBe('2026-07-15'); // clamped to clock.today
+  });
 });

@@ -22,6 +22,7 @@ export { calculateGoalFeasibility } from './goal.js';
 export { maxAffordable } from './max-affordable.js';
 export { buildPaycheckLedger } from './ledger.js';
 export { advisePaycheckPeriods } from './advice.js';
+export { reservedForBills } from './reserved.js';
 
 // Freedom & business scenarios
 export {

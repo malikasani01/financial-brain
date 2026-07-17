@@ -112,6 +112,15 @@ export interface BusinessRow {
   monthly_revenue_cents: number;
 }
 
+export interface TransactionRow {
+  id: string;
+  amount_cents: number;
+  direction: 'income' | 'expense' | 'transfer';
+  txn_date: string;
+  status: 'cleared' | 'uncleared' | 'pending' | 'scheduled';
+  archived_at: string | null;
+}
+
 export interface UserPreferencesRow {
   safety_buffer_override_cents: number | null;
 }
@@ -128,4 +137,6 @@ export interface RawFinancialData {
   plannedPurchases: PlannedPurchaseRow[];
   businesses: BusinessRow[];
   preferences: UserPreferencesRow | null;
+  /** Optional: absent until migration 0004 is applied (older callers omit it). */
+  transactions?: TransactionRow[];
 }

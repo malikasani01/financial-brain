@@ -25,20 +25,20 @@ describe('BottomNav', () => {
     }
   });
 
-  it('emphasizes Ask as the centered circular button', () => {
+  it('emphasizes Plan as the centered circular button', () => {
     h.pathname = '/home';
     render(<BottomNav />);
-    const ask = screen.getByText('Ask').closest('a')!;
-    expect(ask.getAttribute('href')).toBe('/ask');
-    expect(ask.className).toContain('rounded-full');
+    const plan = screen.getByText('Plan').closest('a')!;
+    expect(plan.getAttribute('href')).toBe('/plan');
+    expect(plan.className).toContain('rounded-full');
   });
 
   it('marks the active destination based on the current path', () => {
-    h.pathname = '/plan';
+    h.pathname = '/calendar';
     render(<BottomNav />);
-    const plan = screen.getByText('Plan').closest('a')!;
+    const calendar = screen.getByText('Calendar').closest('a')!;
     const home = screen.getByText('Home').closest('a')!;
-    expect(plan.className).toContain('text-violet600');
+    expect(calendar.className).toContain('text-violet600');
     expect(home.className).not.toContain('text-violet600');
   });
 

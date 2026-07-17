@@ -7,8 +7,17 @@ import { listTransactions } from '@/lib/transactions';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 import { EditTransaction } from '@/components/EditTransaction';
+import { EditBill } from '@/components/EditBill';
 import { LogSaving } from '@/components/LogSaving';
-import { deleteTransaction, editTransaction, saveToGoal } from '@/app/actions/manage';
+import {
+  deleteTransaction,
+  editTransaction,
+  markBillPaid,
+  markSubscriptionPaid,
+  saveToGoal,
+  updateBillAmountDate,
+  updateSubscriptionAmountDate,
+} from '@/app/actions/manage';
 
 export const dynamic = 'force-dynamic';
 
@@ -259,13 +268,13 @@ export default async function PlanPage() {
                 {p.lines.map((l, li) => {
                   const overdue = overdueIds.has(l.sourceId);
                   const txn = l.kind === 'MANUAL' ? txnById.get(l.sourceId) : undefined;
+                  const name = nameById.get(l.sourceId) ?? KIND_LABEL[l.kind];
+                  const editable = txn || l.kind === 'OBLIGATION' || l.kind === 'SUBSCRIPTION';
                   const rowContent = (
                     <>
                       {/* Line 1: what it is + how much */}
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 flex-1 truncate font-medium text-ink900">
-                          {nameById.get(l.sourceId) ?? KIND_LABEL[l.kind]}
-                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-ink900">{name}</span>
                         <span
                           className={`shrink-0 font-num font-semibold ${
                             l.negative ? 'text-neg' : 'text-ink900'
@@ -278,7 +287,7 @@ export default async function PlanPage() {
                       <div className="mt-0.5 flex items-center justify-between gap-3 text-xs text-ink600">
                         <span className="truncate">
                           {overdue ? 'Overdue — due now' : l.date} · {KIND_LABEL[l.kind]}
-                          {txn && <span className="ml-1 text-violet600">· tap to edit</span>}
+                          {editable && <span className="ml-1 text-violet600">· tap to edit</span>}
                         </span>
                         <span
                           className={`shrink-0 font-num ${
@@ -290,20 +299,50 @@ export default async function PlanPage() {
                       </div>
                     </>
                   );
+
+                  let body: React.ReactNode = rowContent;
+                  if (txn) {
+                    body = (
+                      <EditTransaction
+                        txn={txn}
+                        accounts={accounts}
+                        editAction={editTransaction.bind(null, txn.id)}
+                        deleteAction={deleteTransaction.bind(null, txn.id)}
+                      >
+                        {rowContent}
+                      </EditTransaction>
+                    );
+                  } else if (l.kind === 'OBLIGATION') {
+                    body = (
+                      <EditBill
+                        name={name}
+                        amountCents={Math.abs(l.amountCents)}
+                        date={l.date}
+                        accounts={accounts}
+                        editAction={updateBillAmountDate.bind(null, l.sourceId)}
+                        payAction={markBillPaid.bind(null, l.sourceId)}
+                      >
+                        {rowContent}
+                      </EditBill>
+                    );
+                  } else if (l.kind === 'SUBSCRIPTION') {
+                    body = (
+                      <EditBill
+                        name={name}
+                        amountCents={Math.abs(l.amountCents)}
+                        date={l.date}
+                        accounts={accounts}
+                        editAction={updateSubscriptionAmountDate.bind(null, l.sourceId)}
+                        payAction={markSubscriptionPaid.bind(null, l.sourceId)}
+                      >
+                        {rowContent}
+                      </EditBill>
+                    );
+                  }
+
                   return (
                     <li key={`${l.sourceId}-${l.date}-${li}`} className="border-t border-sage/20 py-3 first:border-t-0">
-                      {txn ? (
-                        <EditTransaction
-                          txn={txn}
-                          accounts={accounts}
-                          editAction={editTransaction.bind(null, txn.id)}
-                          deleteAction={deleteTransaction.bind(null, txn.id)}
-                        >
-                          {rowContent}
-                        </EditTransaction>
-                      ) : (
-                        rowContent
-                      )}
+                      {body}
                     </li>
                   );
                 })}

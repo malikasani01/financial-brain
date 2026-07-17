@@ -13,6 +13,7 @@ import {
   addTransaction,
   archiveAndRecalc,
   deleteTransaction,
+  markBillPaid,
   markIncomeReceived,
   recordObligationPayment,
   setAccountBalance,
@@ -203,6 +204,41 @@ describe('deleteTransaction', () => {
     await deleteTransaction('t1');
     expect(acctUpdates(m)).toEqual([204000]); // refunded
     expect(typeof m.calls.updates.find((u) => u.table === 'transactions')!.values!.archived_at).toBe('string');
+  });
+});
+
+const obResolver =
+  (ob: Record<string, unknown>): Resolver =>
+  (table, method) => {
+    if (table === 'accounts' && method === 'maybeSingle') return { data: { balance_cents: 200000 }, error: null };
+    if (table === 'obligations' && method === 'maybeSingle') return { data: ob, error: null };
+    if (method === 'single') return { data: { id: `${table}-id` }, error: null };
+    if (method === 'maybeSingle') return { data: null, error: null };
+    return { data: [], error: null };
+  };
+
+describe('markBillPaid', () => {
+  it('lowers the balance and advances a recurring bill to its next occurrence (no double-count)', async () => {
+    const m = makeSupabase(
+      obResolver({ amount_due_cents: 50000, minimum_required_cents: null, status: 'CURRENT', frequency: 'MONTHLY', next_expected_payment_date: '2026-08-01', due_date: null }),
+    );
+    use(m);
+    await markBillPaid('ob1', form({ account_id: 'a1' }));
+    expect(acctUpdates(m)).toEqual([150000]); // 200,000 - 50,000
+    const ob = m.calls.updates.find((u) => u.table === 'obligations')!.values!;
+    expect(ob.next_expected_payment_date).toBe('2026-09-01'); // advanced one month
+    expect(ob.resolved).toBeUndefined(); // recurring bill is NOT resolved
+    expect(m.calls.inserts.some((c) => c.table === 'obligation_payments')).toBe(true);
+  });
+
+  it('resolves a one-time bill instead of advancing it', async () => {
+    const m = makeSupabase(
+      obResolver({ amount_due_cents: 20000, minimum_required_cents: null, status: 'CURRENT', frequency: 'ONE_TIME', next_expected_payment_date: null, due_date: '2026-08-01' }),
+    );
+    use(m);
+    await markBillPaid('ob1', form({ account_id: 'a1' }));
+    expect(acctUpdates(m)).toEqual([180000]);
+    expect(m.calls.updates.find((u) => u.table === 'obligations')!.values).toMatchObject({ resolved: true, status: 'CURRENT' });
   });
 });
 

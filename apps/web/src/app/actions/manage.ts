@@ -1,9 +1,28 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { addDays, addMonths } from '@fb/engine';
 import { recalculateFinancials } from '@fb/data';
 import { getSessionContext } from '@/lib/session';
-import { dollarsToCents, textOrNull } from '@/lib/money';
+import { dollarsToCents, dollarsToCentsOrNull, textOrNull } from '@/lib/money';
+
+/** The next occurrence date after `anchor` for a recurring frequency. */
+function nextOccurrence(anchor: string, frequency: string): string {
+  switch (frequency) {
+    case 'WEEKLY':
+      return addDays(anchor, 7);
+    case 'BIWEEKLY':
+      return addDays(anchor, 14);
+    case 'SEMIMONTHLY':
+      return addDays(anchor, 15);
+    case 'QUARTERLY':
+      return addMonths(anchor, 3);
+    case 'ANNUAL':
+      return addMonths(anchor, 12);
+    default:
+      return addMonths(anchor, 1); // MONTHLY
+  }
+}
 
 type Supa = Awaited<ReturnType<typeof getSessionContext>>['supabase'];
 
@@ -387,6 +406,120 @@ export async function setAccountBalance(fd: FormData): Promise<void> {
     .from('accounts')
     .update({ balance_cents: dollarsToCents(fd.get('balance')), balance_updated_at: new Date().toISOString() })
     .eq('id', accountId)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+// ---- Editing & clearing bills straight from the ledger ---------------------
+
+/** Quick-edit a bill's amount and due date (leaves its other settings alone). */
+export async function updateBillAmountDate(id: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const date = textOrNull(fd.get('date'));
+  await supabase
+    .from('obligations')
+    .update({
+      amount_due_cents: dollarsToCentsOrNull(fd.get('amount')),
+      due_date: date,
+      // Make the edited date authoritative for where it lands in the forecast.
+      next_expected_payment_date: date,
+    })
+    .eq('id', id)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/**
+ * Mark a bill occurrence paid: lower the account, log the payment, and move the
+ * bill past this occurrence — advance a recurring bill to its next date, or
+ * resolve a one-time/overdue one — so the forecast never counts it twice.
+ */
+export async function markBillPaid(id: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('obligations')
+    .select('amount_due_cents,minimum_required_cents,status,frequency,next_expected_payment_date,due_date')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const ob = data as
+    | {
+        amount_due_cents: number | null;
+        minimum_required_cents: number | null;
+        status: string;
+        frequency: string;
+        next_expected_payment_date: string | null;
+        due_date: string | null;
+      }
+    | null;
+  if (!ob) return;
+
+  const overdue = ob.status === 'OVERDUE' || ob.status === 'SEVERELY_OVERDUE';
+  const amount = overdue
+    ? (ob.minimum_required_cents ?? ob.amount_due_cents ?? 0)
+    : (ob.amount_due_cents ?? ob.minimum_required_cents ?? 0);
+  const accountId = String(fd.get('account_id') ?? '');
+
+  if (accountId) await adjustAccountBalance(supabase, userId, accountId, -amount);
+  await supabase.from('obligation_payments').insert({
+    user_id: userId,
+    obligation_id: id,
+    amount_cents: amount,
+    payment_date: clock.today,
+    account_id: accountId || null,
+    resolved_immediate: 'YES',
+  });
+
+  if (ob.frequency === 'ONE_TIME' || overdue) {
+    await supabase.from('obligations').update({ resolved: true, status: 'CURRENT' }).eq('id', id).eq('user_id', userId);
+  } else {
+    const anchor = ob.next_expected_payment_date ?? ob.due_date ?? clock.today;
+    await supabase
+      .from('obligations')
+      .update({ next_expected_payment_date: nextOccurrence(anchor, ob.frequency) })
+      .eq('id', id)
+      .eq('user_id', userId);
+  }
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Quick-edit a subscription's amount and next charge date. */
+export async function updateSubscriptionAmountDate(id: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  await supabase
+    .from('subscriptions')
+    .update({
+      amount_cents: dollarsToCents(fd.get('amount')),
+      next_charge_date: textOrNull(fd.get('date')),
+    })
+    .eq('id', id)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/home');
+}
+
+/** Mark a subscription charge as cleared: lower the account, advance the schedule. */
+export async function markSubscriptionPaid(id: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('amount_cents,frequency,next_charge_date')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const sub = data as { amount_cents: number; frequency: string; next_charge_date: string | null } | null;
+  if (!sub) return;
+
+  const accountId = String(fd.get('account_id') ?? '');
+  if (accountId) await adjustAccountBalance(supabase, userId, accountId, -sub.amount_cents);
+  const anchor = sub.next_charge_date ?? clock.today;
+  await supabase
+    .from('subscriptions')
+    .update({ next_charge_date: nextOccurrence(anchor, sub.frequency) })
+    .eq('id', id)
     .eq('user_id', userId);
   await recalculateFinancials(supabase, userId, clock);
   refresh('/home');

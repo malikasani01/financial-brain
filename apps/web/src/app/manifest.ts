@@ -7,8 +7,9 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'What money is truly safe for you to spend.',
     start_url: '/home',
     display: 'standalone',
-    background_color: '#20362B',
-    theme_color: '#20362B',
+    // Ink splash to match the icon tile; violet is the brand toolbar accent.
+    background_color: '#14131A',
+    theme_color: '#6C4CFF',
     icons: [
       // Scalable source for any browser that supports it.
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },

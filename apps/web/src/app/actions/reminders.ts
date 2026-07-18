@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { addDays, addMonths } from '@fb/engine';
+import { extractReminder, type ExtractedReminder, type ReminderCandidate } from '@fb/ai';
 import { getSessionContext } from '@/lib/session';
+import { listOwn } from '@/lib/db';
 import { textOrNull } from '@/lib/money';
 import type { ReminderRecurrence } from '@/lib/reminders';
 
@@ -208,4 +210,97 @@ export async function deleteReminder(id: string): Promise<void> {
     .eq('id', id)
     .eq('user_id', userId);
   refresh();
+}
+
+// ---- Voice capture ---------------------------------------------------------
+
+export type TranscribeResult = { ok: true; text: string } | { ok: false; error: string };
+export type SuggestResult = { ok: true; suggestion: ExtractedReminder } | { ok: false; error: string };
+
+/**
+ * Transcribe a short audio clip with OpenAI Whisper. The audio is forwarded to
+ * OpenAI for this one request and never stored anywhere — only the returned
+ * text is used. Degrades gracefully if the key is missing, so the rest of the
+ * feature keeps working.
+ */
+export async function transcribeVoice(fd: FormData): Promise<TranscribeResult> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: 'Voice transcription isn’t set up yet. Add OPENAI_API_KEY to apps/web/.env.local, or just type your reminder.',
+    };
+  }
+  const audio = fd.get('audio');
+  if (!(audio instanceof Blob) || audio.size === 0) {
+    return { ok: false, error: 'No audio was recorded. Try again, or type your reminder.' };
+  }
+
+  try {
+    const upstream = new FormData();
+    upstream.append('file', audio, 'reminder.webm');
+    upstream.append('model', 'whisper-1');
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: upstream,
+    });
+    if (!res.ok) {
+      return { ok: false, error: 'Could not transcribe the audio. You can type your reminder instead.' };
+    }
+    const data = (await res.json()) as { text?: string };
+    const text = (data.text ?? '').trim();
+    if (!text) return { ok: false, error: 'Didn’t catch that. Try again, or type your reminder.' };
+    return { ok: true, text };
+  } catch {
+    return { ok: false, error: 'Could not reach the transcription service. You can type your reminder.' };
+  }
+}
+
+/**
+ * Ask Claude to turn transcript/typed text into suggested reminder fields,
+ * matching against the user's real financial items. Only the text and the item
+ * names/ids are sent — no other financial data. The user reviews and edits the
+ * suggestion before anything is saved.
+ */
+export async function suggestReminder(text: string): Promise<SuggestResult> {
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: false, error: 'Nothing to read yet.' };
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: 'AI suggestions aren’t connected. Add ANTHROPIC_API_KEY to apps/web/.env.local — you can still fill the fields yourself.',
+    };
+  }
+
+  const { clock } = await getSessionContext();
+  const [subs, obls, accts, goals, biz] = await Promise.all([
+    listOwn('subscriptions', 'id,name'),
+    listOwn('obligations', 'id,name'),
+    listOwn('accounts', 'id,name'),
+    listOwn('goals', 'id,name'),
+    listOwn('businesses', 'id,name'),
+  ]);
+  const candidates: ReminderCandidate[] = [
+    ...subs.map((r) => ({ ref: `subscription:${r.id}`, name: String(r.name), type: 'subscription' })),
+    ...obls.map((r) => ({ ref: `obligation:${r.id}`, name: String(r.name), type: 'obligation' })),
+    ...accts.map((r) => ({ ref: `account:${r.id}`, name: String(r.name), type: 'account' })),
+    ...goals.map((r) => ({ ref: `goal:${r.id}`, name: String(r.name), type: 'goal' })),
+    ...biz.map((r) => ({ ref: `business:${r.id}`, name: String(r.name), type: 'business' })),
+  ];
+
+  try {
+    const suggestion = await extractReminder({
+      text: trimmed,
+      candidates,
+      today: clock.today,
+      timezone: clock.timezone,
+      apiKey,
+    });
+    return { ok: true, suggestion };
+  } catch {
+    return { ok: false, error: 'Couldn’t generate a suggestion. You can fill the fields yourself.' };
+  }
 }

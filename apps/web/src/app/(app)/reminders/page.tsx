@@ -12,6 +12,7 @@ import {
 import { Icon } from '@/components/Icon';
 import { ReminderForm } from '@/components/ReminderForm';
 import { ReminderRow as Row } from '@/components/ReminderRow';
+import { VoiceReminder } from '@/components/VoiceReminder';
 import type { RelatedOption } from '@/lib/reminder-options';
 import { createReminder } from '@/app/actions/reminders';
 
@@ -35,14 +36,22 @@ const SECTION_TITLE: Record<string, string> = {
   completed: 'Completed',
 };
 
-function AddButton({ relatedOptions }: { relatedOptions: RelatedOption[] }) {
+function QuickAdd({ relatedOptions }: { relatedOptions: RelatedOption[] }) {
   return (
-    <ReminderForm action={createReminder} title="New reminder" relatedOptions={relatedOptions}>
-      <span className="flex items-center justify-center gap-2 rounded-button bg-violet500 px-5 py-3.5 font-bold text-white shadow-card">
-        <Icon name="plus" size={20} />
-        Add reminder
-      </span>
-    </ReminderForm>
+    <div className="grid grid-cols-2 gap-3">
+      <ReminderForm action={createReminder} title="New reminder" relatedOptions={relatedOptions}>
+        <span className="flex items-center justify-center gap-2 rounded-button bg-violet500 px-4 py-3.5 font-bold text-white shadow-card">
+          <Icon name="plus" size={20} />
+          Add reminder
+        </span>
+      </ReminderForm>
+      <VoiceReminder relatedOptions={relatedOptions}>
+        <span className="flex items-center justify-center gap-2 rounded-button border border-violet500 bg-white px-4 py-3.5 font-bold text-violet600 shadow-card">
+          <Icon name="microphone" size={20} />
+          Record with voice
+        </span>
+      </VoiceReminder>
+    </div>
   );
 }
 
@@ -141,7 +150,7 @@ export default async function RemindersPage({
 
       {/* Quick-add area */}
       <div className="mt-5">
-        <AddButton relatedOptions={relatedOptions} />
+        <QuickAdd relatedOptions={relatedOptions} />
       </div>
 
       {!hasAny ? (
@@ -153,8 +162,8 @@ export default async function RemindersPage({
           <p className="mt-1 text-sm text-ink600">
             Add a financial task by typing it or saying it out loud.
           </p>
-          <div className="mt-5">
-            <AddButton relatedOptions={relatedOptions} />
+          <div className="mt-6">
+            <QuickAdd relatedOptions={relatedOptions} />
           </div>
         </div>
       ) : (

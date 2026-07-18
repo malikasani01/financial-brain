@@ -5,6 +5,8 @@ import { loadEngineView } from '@/lib/engine-view';
 import { getSessionContext } from '@/lib/session';
 import { listOwn } from '@/lib/db';
 import { listTransactions, listExpenseCategories } from '@/lib/transactions';
+import { attentionReminders, listReminders } from '@/lib/reminders';
+import { shortDate } from '@/lib/reminder-options';
 import { centsToWholeDollars, centsToDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 import { Badge, Logo, Money } from '@/components/brand';
@@ -79,6 +81,7 @@ export default async function HomePage() {
     accountRows,
     recent,
     { categories: usedCategories, lastUsed },
+    reminders,
   ] = await Promise.all([
     loadEngineView(),
     oldestBalanceAgeDays(),
@@ -87,9 +90,11 @@ export default async function HomePage() {
     listOwn('accounts', 'id,name'),
     listTransactions({ limit: 5 }),
     listExpenseCategories(),
+    listReminders(),
   ]);
   const s = output.safeToSpend;
   const today = clock.today;
+  const attention = attentionReminders(reminders, today, 3);
 
   // --- Hero numbers (all engine-computed; the breakdown reconciles) ---
   const bankCents = s.currentLiquidCashCents;
@@ -234,6 +239,41 @@ export default async function HomePage() {
       >
         <Icon name="chat" size={20} /> Can I afford something?
       </Link>
+
+      {/* Reminders needing attention */}
+      {attention.length > 0 && (
+        <Link href="/reminders" className="mt-6 block">
+          <Card>
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-button bg-violet100 text-violet600">
+                <Icon name="bell" size={18} />
+              </span>
+              <div>
+                <p className="font-extrabold text-ink900">Needs your attention</p>
+                <p className="text-xs text-ink600">
+                  {attention.length} financial {attention.length === 1 ? 'reminder' : 'reminders'}
+                </p>
+              </div>
+            </div>
+            <ul className="mt-3 space-y-2">
+              {attention.map((r) => {
+                const overdue = r.due_date != null && r.due_date < today;
+                const dueToday = r.due_date === today;
+                const tag = overdue ? 'overdue' : dueToday ? 'due today' : `due ${shortDate(r.due_date)}`;
+                return (
+                  <li key={r.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-ink900">{r.title}</span>
+                    <span className={overdue ? 'shrink-0 font-bold text-neg' : 'shrink-0 text-ink600'}>
+                      {tag}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-3 text-sm font-bold text-violet600">View reminders →</p>
+          </Card>
+        </Link>
+      )}
 
       {/* This Week */}
       <h2 className="mt-8 text-lg font-extrabold text-ink900">This week</h2>

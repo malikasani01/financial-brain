@@ -15,6 +15,7 @@ import { Icon } from '@/components/Icon';
 import { ReminderForm } from '@/components/ReminderForm';
 import { ReminderRow as Row } from '@/components/ReminderRow';
 import { VoiceReminder } from '@/components/VoiceReminder';
+import { ReminderNotifier, type DueReminder } from '@/components/ReminderNotifier';
 import type { RelatedOption } from '@/lib/reminder-options';
 import { createReminder } from '@/app/actions/reminders';
 
@@ -165,6 +166,19 @@ export default async function RemindersPage({
   const hasAny = reminders.length > 0;
   const shownCount = visibleKeys.reduce((n, k) => n + sections[k].length, 0);
 
+  // Overdue + due-today open reminders drive the foreground notifier.
+  const dueNow: DueReminder[] = reminders
+    .filter((r) => {
+      const t = reminderTiming(r, today);
+      return t === 'overdue' || t === 'today';
+    })
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      dueKey: r.due_date ?? today,
+      overdue: r.due_date != null && r.due_date < today,
+    }));
+
   const chipHref = (key: FilterKey) => {
     const params = new URLSearchParams();
     if (key !== 'all') params.set('f', key);
@@ -191,6 +205,8 @@ export default async function RemindersPage({
       <div className="mt-5">
         <QuickAdd relatedOptions={relatedOptions} />
       </div>
+
+      <ReminderNotifier due={dueNow} />
 
       {!hasAny ? (
         <div className="mt-10 rounded-card bg-white p-8 text-center shadow-card">

@@ -4,6 +4,7 @@ import { addDays } from '@fb/engine';
 import { loadEngineView } from '@/lib/engine-view';
 import { listOwn } from '@/lib/db';
 import { listTransactions } from '@/lib/transactions';
+import { listReminders } from '@/lib/reminders';
 import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 import { Icon } from '@/components/Icon';
@@ -43,14 +44,26 @@ export default async function CalendarPage({
 }) {
   // One concurrent wave: search params, the engine view, and the name/txn
   // reads all resolve together.
-  const [{ m, d }, { input, output, clock }, subRows, incomeRows, txns] = await Promise.all([
-    searchParams,
-    loadEngineView(),
-    listOwn('subscriptions', 'id,name'),
-    listOwn('income_sources', 'id,name'),
-    listTransactions({ limit: 300 }),
-  ]);
+  const [{ m, d }, { input, output, clock }, subRows, incomeRows, txns, reminders] =
+    await Promise.all([
+      searchParams,
+      loadEngineView(),
+      listOwn('subscriptions', 'id,name'),
+      listOwn('income_sources', 'id,name'),
+      listTransactions({ limit: 300 }),
+      listReminders(),
+    ]);
   const today = clock.today;
+
+  // Open, dated reminders by day — shown as violet dots and in the day detail.
+  // Purely presentational: reminders never change projected cash.
+  const remindersByDate = new Map<string, typeof reminders>();
+  for (const r of reminders) {
+    if (r.status !== 'OPEN' || !r.due_date) continue;
+    const arr = remindersByDate.get(r.due_date) ?? [];
+    arr.push(r);
+    remindersByDate.set(r.due_date, arr);
+  }
 
   const monthStr = /^\d{4}-\d{2}$/.test(m ?? '') ? m! : today.slice(0, 7);
   const [year, month] = monthStr.split('-').map(Number);
@@ -90,6 +103,7 @@ export default async function CalendarPage({
   // --- Selected-day details ---
   const selEvents = eventsByDate.get(selected) ?? [];
   const selCleared = clearedByDate.get(selected) ?? [];
+  const selReminders = remindersByDate.get(selected) ?? [];
   const selIncome = selEvents.filter((e) => e.amountCents > 0).reduce((t, e) => t + e.amountCents, 0);
   const selExpense = selEvents.filter((e) => e.amountCents < 0).reduce((t, e) => t + e.amountCents, 0);
   const selProjected = projByDate.get(selected) ?? null;
@@ -158,6 +172,7 @@ export default async function CalendarPage({
             const evs = eventsByDate.get(date) ?? [];
             const tones = new Set<Tone>(evs.map(toneFor));
             if ((clearedByDate.get(date)?.length ?? 0) > 0) tones.add('neg');
+            if ((remindersByDate.get(date)?.length ?? 0) > 0) tones.add('violet');
             const isToday = date === today;
             const isSel = date === selected;
             return (
@@ -224,6 +239,22 @@ export default async function CalendarPage({
       )}
       {selEvents.length === 0 && selCleared.length === 0 && (
         <p className="mt-3 text-sm text-ink600">This day has no planned financial activity.</p>
+      )}
+
+      {selReminders.length > 0 && (
+        <Link href="/reminders" className="mt-3 block">
+          <Card>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-violet600">
+              <Icon name="bell" size={14} /> Reminders
+            </p>
+            {selReminders.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 border-t border-line py-2.5 first:border-t-0">
+                <StatusDot tone="violet" />
+                <span className="truncate text-ink900">{r.title}</span>
+              </div>
+            ))}
+          </Card>
+        </Link>
       )}
     </main>
   );

@@ -41,6 +41,10 @@ begin
   if to_regclass('public.transactions') is not null then
     delete from public.transactions where user_id = uid;
   end if;
+  -- reminders only exists once migration 0005 has been applied.
+  if to_regclass('public.reminders') is not null then
+    delete from public.reminders where user_id = uid;
+  end if;
   delete from public.obligation_payments       where user_id = uid;
   delete from public.goal_contributions        where user_id = uid;
   delete from public.business_scenarios        where user_id = uid;

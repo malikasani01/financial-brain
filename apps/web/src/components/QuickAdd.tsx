@@ -93,7 +93,7 @@ export function QuickAdd({
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Quick add"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-violet500 text-white shadow-card"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-neg text-white shadow-card"
           >
             <Icon name="plus" size={26} />
           </button>

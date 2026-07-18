@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { getSessionContext } from '@/lib/session';
+import { attentionCount, listReminders } from '@/lib/reminders';
 import { Icon, type IconName } from '@/components/Icon';
 import { Logo } from '@/components/brand';
 
@@ -11,8 +13,14 @@ interface MoreLink {
   icon: IconName;
 }
 
-// Grouped so the daily-money tools sit above setup/records.
+// Grouped so reminders and the daily-money tools sit above setup/records.
 const GROUPS: { title: string; items: MoreLink[] }[] = [
+  {
+    title: 'Stay on top of things',
+    items: [
+      { href: '/reminders', label: 'Reminders', hint: 'Financial tasks & follow-ups', icon: 'bell' },
+    ],
+  },
   {
     title: 'Understand',
     items: [
@@ -37,7 +45,11 @@ const GROUPS: { title: string; items: MoreLink[] }[] = [
   },
 ];
 
-export default function MorePage() {
+export default async function MorePage() {
+  // Badge count for reminders that need attention now (overdue + due today).
+  const { clock } = await getSessionContext();
+  const remindersDue = attentionCount(await listReminders(), clock.today);
+
   return (
     <main className="mx-auto max-w-md px-6 py-10">
       <div className="flex items-center gap-3">
@@ -62,6 +74,14 @@ export default function MorePage() {
                     <span className="block font-bold text-ink900">{item.label}</span>
                     <span className="block text-sm text-ink600">{item.hint}</span>
                   </span>
+                  {item.href === '/reminders' && remindersDue > 0 && (
+                    <span
+                      className="flex h-6 min-w-6 items-center justify-center rounded-full bg-neg px-1.5 text-xs font-bold text-white"
+                      aria-label={`${remindersDue} reminders need attention`}
+                    >
+                      {remindersDue}
+                    </span>
+                  )}
                   <Icon name="caret-right" size={18} className="text-ink600" />
                 </Link>
               </li>

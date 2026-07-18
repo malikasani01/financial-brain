@@ -12,6 +12,7 @@ import {
 import { Icon } from '@/components/Icon';
 import { ReminderForm } from '@/components/ReminderForm';
 import { ReminderRow as Row } from '@/components/ReminderRow';
+import type { RelatedOption } from '@/lib/reminder-options';
 import { createReminder } from '@/app/actions/reminders';
 
 export const dynamic = 'force-dynamic';
@@ -34,9 +35,9 @@ const SECTION_TITLE: Record<string, string> = {
   completed: 'Completed',
 };
 
-function AddButton() {
+function AddButton({ relatedOptions }: { relatedOptions: RelatedOption[] }) {
   return (
-    <ReminderForm action={createReminder} title="New reminder">
+    <ReminderForm action={createReminder} title="New reminder" relatedOptions={relatedOptions}>
       <span className="flex items-center justify-center gap-2 rounded-button bg-violet500 px-5 py-3.5 font-bold text-white shadow-card">
         <Icon name="plus" size={20} />
         Add reminder
@@ -77,6 +78,22 @@ export default async function RemindersPage({
     r.related_entity_type && r.related_entity_id
       ? (nameMaps[r.related_entity_type]?.get(r.related_entity_id) ?? null)
       : null;
+
+  // Options for the "link to a financial item" picker (value = "type:id").
+  const TYPE_LABEL: Record<ReminderEntityType, string> = {
+    subscription: 'Subscription',
+    obligation: 'Obligation',
+    account: 'Account',
+    goal: 'Goal',
+    business: 'Business',
+  };
+  const relatedOptions: RelatedOption[] = (Object.keys(nameMaps) as ReminderEntityType[]).flatMap(
+    (type) =>
+      [...nameMaps[type].entries()].map(([id, name]) => ({
+        value: `${type}:${id}`,
+        label: `${name} (${TYPE_LABEL[type]})`,
+      })),
+  );
 
   // Optional category filter (?c=), then group.
   const scoped = c ? reminders.filter((r) => r.category === c) : reminders;
@@ -124,7 +141,7 @@ export default async function RemindersPage({
 
       {/* Quick-add area */}
       <div className="mt-5">
-        <AddButton />
+        <AddButton relatedOptions={relatedOptions} />
       </div>
 
       {!hasAny ? (
@@ -137,7 +154,7 @@ export default async function RemindersPage({
             Add a financial task by typing it or saying it out loud.
           </p>
           <div className="mt-5">
-            <AddButton />
+            <AddButton relatedOptions={relatedOptions} />
           </div>
         </div>
       ) : (
@@ -208,6 +225,7 @@ export default async function RemindersPage({
                           timing={reminderTiming(r, today)}
                           dueSoon={isDueSoon(r, today)}
                           linkedLabel={linkedLabel(r)}
+                          relatedOptions={relatedOptions}
                         />
                       ))}
                     </div>

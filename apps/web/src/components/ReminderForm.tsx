@@ -7,12 +7,20 @@ import {
   REMINDER_CATEGORIES,
   REMINDER_PRIORITIES,
   REMINDER_REPEATS,
+  type RelatedOption,
 } from '@/lib/reminder-options';
-import type { ReminderRow } from '@/lib/reminders';
+import type { ReminderLead, ReminderRow } from '@/lib/reminders';
 
 const field =
   'mt-1 w-full rounded-input border border-line bg-white px-4 py-3 outline-none focus:border-violet500';
 const label = 'block text-sm font-semibold text-ink600';
+
+const LEADS: { value: ReminderLead; label: string }[] = [
+  { value: 'AT_DUE', label: 'At due time' },
+  { value: 'ONE_DAY', label: '1 day before' },
+  { value: 'THREE_DAYS', label: '3 days before' },
+  { value: 'ONE_WEEK', label: '1 week before' },
+];
 
 function SaveBtn({ create }: { create: boolean }) {
   const { pending } = useFormStatus();
@@ -28,24 +36,45 @@ function SaveBtn({ create }: { create: boolean }) {
 }
 
 /**
- * Create or edit a reminder. `children` is the tappable trigger (a button or a
- * row). Pass `reminder` to prefill for editing; omit it to create. The core
- * fields live here; richer capture (voice, related-item link, notification
- * timing) is layered on in later phases.
+ * Create or edit a reminder. `children` is the tappable trigger. Pass
+ * `reminder` to prefill for editing; omit it to create. `relatedOptions` (the
+ * user's real subscriptions/obligations/accounts/goals/businesses) powers the
+ * optional "link to a financial item" picker.
  */
 export function ReminderForm({
   action,
   reminder,
   title,
+  relatedOptions = [],
   children,
 }: {
   action: (fd: FormData) => Promise<void>;
   reminder?: ReminderRow;
   title: string;
+  relatedOptions?: RelatedOption[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const create = !reminder;
+
+  const initialRef =
+    reminder?.related_entity_type && reminder?.related_entity_id
+      ? `${reminder.related_entity_type}:${reminder.related_entity_id}`
+      : '';
+  const [relatedRef, setRelatedRef] = useState(initialRef);
+  const [relType, relId] = relatedRef ? relatedRef.split(':') : ['', ''];
+
+  const [leads, setLeads] = useState<Set<ReminderLead>>(
+    new Set(reminder?.notification_preferences?.lead ?? []),
+  );
+  const toggleLead = (l: ReminderLead) =>
+    setLeads((prev) => {
+      const next = new Set(prev);
+      if (next.has(l)) next.delete(l);
+      else next.add(l);
+      return next;
+    });
+  const notifJson = leads.size > 0 ? JSON.stringify({ lead: [...leads] }) : '';
 
   return (
     <>
@@ -61,6 +90,14 @@ export function ReminderForm({
           }}
           className="grid gap-3"
         >
+          {/* Link + notifications ride along as hidden fields driven by state. */}
+          <input type="hidden" name="related_entity_type" value={relType} />
+          <input type="hidden" name="related_entity_id" value={relId} />
+          <input type="hidden" name="notification_preferences" value={notifJson} />
+          {reminder?.transcription && (
+            <input type="hidden" name="transcription" value={reminder.transcription} />
+          )}
+
           <label className={label}>
             What do you need to remember?
             <input
@@ -132,6 +169,55 @@ export function ReminderForm({
                 ))}
               </select>
             </label>
+          </div>
+
+          {relatedOptions.length > 0 && (
+            <label className={label}>
+              Related financial item <span className="font-normal text-ink600">(optional)</span>
+              <select
+                value={relatedRef}
+                onChange={(e) => setRelatedRef(e.target.value)}
+                className={field}
+              >
+                <option value="">Not linked</option>
+                {['subscription', 'obligation', 'account', 'goal', 'business'].map((group) => {
+                  const opts = relatedOptions.filter((o) => o.value.startsWith(`${group}:`));
+                  if (opts.length === 0) return null;
+                  return (
+                    <optgroup key={group} label={group[0]!.toUpperCase() + group.slice(1) + 's'}>
+                      {opts.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            </label>
+          )}
+
+          <div>
+            <span className={label}>
+              Remind me <span className="font-normal text-ink600">(while the app is open)</span>
+            </span>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {LEADS.map((l) => {
+                const on = leads.has(l.value);
+                return (
+                  <button
+                    key={l.value}
+                    type="button"
+                    onClick={() => toggleLead(l.value)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                      on ? 'bg-violet500 text-white' : 'bg-line text-ink600'
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <SaveBtn create={create} />

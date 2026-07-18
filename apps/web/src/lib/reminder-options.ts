@@ -5,6 +5,12 @@
  */
 import type { ReminderPriority, ReminderRecurrence, ReminderTiming } from '@/lib/reminders';
 
+/** A pickable financial item to link a reminder to; `value` is "type:id". */
+export interface RelatedOption {
+  value: string;
+  label: string;
+}
+
 /** The standard financial reminder categories (this is not a general notes app). */
 export const REMINDER_CATEGORIES = [
   'Subscription',

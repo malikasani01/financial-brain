@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useFormStatus } from 'react-dom';
+import { BottomSheet } from '@/components/BottomSheet';
+import { ReminderForm } from '@/components/ReminderForm';
 import { Icon } from '@/components/Icon';
 import { Badge } from '@/components/brand';
 import {
@@ -8,33 +11,56 @@ import {
   TIMING_META,
   shortDate,
   shortTime,
+  type RelatedOption,
 } from '@/lib/reminder-options';
 import {
   deleteReminder,
   duplicateReminder,
+  rescheduleReminder,
   setReminderComplete,
+  updateReminder,
 } from '@/app/actions/reminders';
 import type { ReminderRow as Reminder, ReminderTiming } from '@/lib/reminders';
 
+const field =
+  'mt-1 w-full rounded-input border border-line bg-white px-4 py-3 outline-none focus:border-violet500';
+const label = 'block text-sm font-semibold text-ink600';
+
+function RescheduleBtn() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="mt-1 w-full rounded-button bg-violet500 px-5 py-4 text-center font-bold text-white shadow-card disabled:opacity-60"
+    >
+      {pending ? 'Saving…' : 'Reschedule'}
+    </button>
+  );
+}
+
 /**
- * One reminder row: a rounded checkbox to complete/reopen, the title and its
- * meta chips (category, priority, timing, linked item), and a small actions
- * menu (duplicate, delete). Completing never deletes — the row simply moves to
- * the Completed section and can be un-checked.
+ * One reminder row: a rounded checkbox to complete/reopen, the title (tap to
+ * edit) and its meta chips, and a small actions menu (reschedule, duplicate,
+ * delete). Completing never deletes — the row moves to Completed and can be
+ * un-checked.
  */
 export function ReminderRow({
   reminder,
   timing,
   dueSoon,
   linkedLabel,
+  relatedOptions,
 }: {
   reminder: Reminder;
   timing: ReminderTiming;
   dueSoon: boolean;
   linkedLabel: string | null;
+  relatedOptions: RelatedOption[];
 }) {
   const [pending, start] = useTransition();
   const [menu, setMenu] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
   const done = reminder.status !== 'OPEN';
   const canceled = reminder.status === 'CANCELED';
 
@@ -61,35 +87,45 @@ export function ReminderRow({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className={`font-bold text-ink900 ${done ? 'text-ink600 line-through' : ''}`}>
-          {reminder.title}
-        </p>
+        <ReminderForm
+          action={updateReminder.bind(null, reminder.id)}
+          reminder={reminder}
+          relatedOptions={relatedOptions}
+          title="Edit reminder"
+        >
+          <p className={`font-bold text-ink900 ${done ? 'text-ink600 line-through' : ''}`}>
+            {reminder.title}
+          </p>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink600">
-          {reminder.due_date && (
-            <span className="font-semibold">
-              {timing === 'today' ? 'Today' : dateLabel}
-              {timeLabel && ` · ${timeLabel}`}
-            </span>
-          )}
-          {reminder.category && <span>{reminder.category}</span>}
-          {linkedLabel && (
-            <span className="inline-flex items-center gap-1 text-violet600">
-              <Icon name="repeat" size={12} />
-              {linkedLabel}
-            </span>
-          )}
-        </div>
-
-        {(timingMeta || reminder.priority !== 'NORMAL' || reminder.recurrence_rule !== 'NONE') && !done && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {timingMeta && timing !== 'upcoming' && <Badge tone={timingMeta.tone}>{timingMeta.label}</Badge>}
-            {timing === 'upcoming' && dueSoon && <Badge tone="warn">Due soon</Badge>}
-            {reminder.priority !== 'NORMAL' && <Badge tone={priority.tone}>{priority.label}</Badge>}
-            {reminder.recurrence_rule !== 'NONE' && <Badge tone="neutral">Repeats</Badge>}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink600">
+            {reminder.due_date && (
+              <span className="font-semibold">
+                {timing === 'today' ? 'Today' : dateLabel}
+                {timeLabel && ` · ${timeLabel}`}
+              </span>
+            )}
+            {reminder.category && <span>{reminder.category}</span>}
+            {linkedLabel && (
+              <span className="inline-flex items-center gap-1 text-violet600">
+                <Icon name="repeat" size={12} />
+                {linkedLabel}
+              </span>
+            )}
           </div>
-        )}
-        {canceled && <p className="mt-1 text-xs text-ink600">Canceled</p>}
+
+          {(timingMeta || reminder.priority !== 'NORMAL' || reminder.recurrence_rule !== 'NONE') &&
+            !done && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {timingMeta && timing !== 'upcoming' && (
+                  <Badge tone={timingMeta.tone}>{timingMeta.label}</Badge>
+                )}
+                {timing === 'upcoming' && dueSoon && <Badge tone="warn">Due soon</Badge>}
+                {reminder.priority !== 'NORMAL' && <Badge tone={priority.tone}>{priority.label}</Badge>}
+                {reminder.recurrence_rule !== 'NONE' && <Badge tone="neutral">Repeats</Badge>}
+              </div>
+            )}
+          {canceled && <p className="mt-1 text-xs text-ink600">Canceled</p>}
+        </ReminderForm>
       </div>
 
       <div className="relative shrink-0">
@@ -109,9 +145,19 @@ export function ReminderRow({
                 type="button"
                 onClick={() => {
                   setMenu(false);
-                  dup();
+                  setRescheduling(true);
                 }}
                 className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-ink900 hover:bg-line/50"
+              >
+                Reschedule
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenu(false);
+                  dup();
+                }}
+                className="block w-full border-t border-line px-4 py-2.5 text-left text-sm font-semibold text-ink900 hover:bg-line/50"
               >
                 Duplicate
               </button>
@@ -129,6 +175,28 @@ export function ReminderRow({
           </>
         )}
       </div>
+
+      <BottomSheet open={rescheduling} onClose={() => setRescheduling(false)} title="Reschedule">
+        <form
+          action={async (fd) => {
+            await rescheduleReminder(reminder.id, fd);
+            setRescheduling(false);
+          }}
+          className="grid gap-3"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <label className={label}>
+              Due date
+              <input name="due_date" type="date" defaultValue={reminder.due_date ?? ''} className={field} />
+            </label>
+            <label className={label}>
+              Time
+              <input name="due_time" type="time" defaultValue={reminder.due_time ?? ''} className={field} />
+            </label>
+          </div>
+          <RescheduleBtn />
+        </form>
+      </BottomSheet>
     </div>
   );
 }

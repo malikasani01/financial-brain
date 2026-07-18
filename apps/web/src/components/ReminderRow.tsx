@@ -14,6 +14,7 @@ import {
   type RelatedOption,
 } from '@/lib/reminder-options';
 import {
+  cancelSubscriptionForReminder,
   deleteReminder,
   duplicateReminder,
   rescheduleReminder,
@@ -50,21 +51,42 @@ export function ReminderRow({
   timing,
   dueSoon,
   linkedLabel,
+  linkedContext,
   relatedOptions,
 }: {
   reminder: Reminder;
   timing: ReminderTiming;
   dueSoon: boolean;
   linkedLabel: string | null;
+  linkedContext: string | null;
   relatedOptions: RelatedOption[];
 }) {
   const [pending, start] = useTransition();
   const [menu, setMenu] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const done = reminder.status !== 'OPEN';
   const canceled = reminder.status === 'CANCELED';
+  const subLink =
+    reminder.related_entity_type === 'subscription' && reminder.related_entity_id
+      ? reminder.related_entity_id
+      : null;
 
-  const toggle = () => start(async () => void (await setReminderComplete(reminder.id, !done)));
+  const complete = () => start(async () => void (await setReminderComplete(reminder.id, true)));
+  const toggle = () => {
+    // Completing a subscription-linked reminder first asks whether the
+    // subscription was actually canceled (which stops its future charges).
+    if (!done && subLink) {
+      setConfirmCancel(true);
+      return;
+    }
+    start(async () => void (await setReminderComplete(reminder.id, !done)));
+  };
+  const cancelAndComplete = () =>
+    start(async () => {
+      if (subLink) await cancelSubscriptionForReminder(subLink);
+      await setReminderComplete(reminder.id, true);
+    });
   const dup = () => start(async () => void (await duplicateReminder(reminder.id)));
   const del = () => start(async () => void (await deleteReminder(reminder.id)));
 
@@ -92,6 +114,7 @@ export function ReminderRow({
           reminder={reminder}
           relatedOptions={relatedOptions}
           title="Edit reminder"
+          contextBanner={linkedContext}
         >
           <p className={`font-bold text-ink900 ${done ? 'text-ink600 line-through' : ''}`}>
             {reminder.title}
@@ -196,6 +219,47 @@ export function ReminderRow({
           </div>
           <RescheduleBtn />
         </form>
+      </BottomSheet>
+
+      <BottomSheet
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title="Cancel subscription?"
+      >
+        <p className="text-sm text-ink900">Did you successfully cancel this subscription?</p>
+        {linkedContext && <p className="mt-1 text-sm font-semibold text-violet600">{linkedContext}</p>}
+        <div className="mt-5 grid gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmCancel(false);
+              cancelAndComplete();
+            }}
+            className="w-full rounded-button bg-violet500 px-5 py-3.5 text-center font-bold text-white shadow-card"
+          >
+            Yes — mark it canceled
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmCancel(false);
+              complete();
+            }}
+            className="w-full rounded-button border border-line bg-white px-5 py-3.5 text-center font-bold text-ink900"
+          >
+            No — just complete the reminder
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmCancel(false)}
+            className="w-full px-5 py-2.5 text-center text-sm font-bold text-ink600"
+          >
+            Not yet
+          </button>
+        </div>
+        <p className="mt-3 text-center text-xs text-ink600">
+          Marking it canceled stops its future charges and updates your forecast. The record is kept.
+        </p>
       </BottomSheet>
     </div>
   );

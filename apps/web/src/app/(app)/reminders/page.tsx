@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getSessionContext } from '@/lib/session';
+import { loadEngineView } from '@/lib/engine-view';
 import { listOwn } from '@/lib/db';
+import { centsToDollars } from '@/lib/money';
 import {
   groupReminders,
   isDueSoon,
@@ -36,6 +38,24 @@ const SECTION_TITLE: Record<string, string> = {
   completed: 'Completed',
 };
 
+/** Approximate monthly cost of a recurring charge, for the "may free $X/mo" note. */
+function monthlyCents(cents: number, freq: string): number {
+  switch (freq) {
+    case 'WEEKLY':
+      return Math.round((cents * 52) / 12);
+    case 'BIWEEKLY':
+      return Math.round((cents * 26) / 12);
+    case 'SEMIMONTHLY':
+      return cents * 2;
+    case 'QUARTERLY':
+      return Math.round(cents / 3);
+    case 'ANNUAL':
+      return Math.round(cents / 12);
+    default:
+      return cents; // MONTHLY / ONE_TIME / CUSTOM
+  }
+}
+
 function QuickAdd({ relatedOptions }: { relatedOptions: RelatedOption[] }) {
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -60,18 +80,37 @@ export default async function RemindersPage({
 }: {
   searchParams: Promise<{ f?: string; c?: string }>;
 }) {
-  const [{ f, c }, { clock }, reminders, subRows, oblRows, acctRows, goalRows, bizRows] =
+  const [{ f, c }, { clock }, view, reminders, subRows, oblRows, acctRows, goalRows, bizRows] =
     await Promise.all([
       searchParams,
       getSessionContext(),
+      loadEngineView(),
       listReminders(),
-      listOwn('subscriptions', 'id,name'),
+      listOwn('subscriptions', 'id,name,amount_cents,frequency'),
       listOwn('obligations', 'id,name'),
       listOwn('accounts', 'id,name'),
       listOwn('goals', 'id,name'),
       listOwn('businesses', 'id,name'),
     ]);
   const today = clock.today;
+
+  // Live context for linked items: subscription monthly cost, obligation urgency.
+  const subInfo = new Map(
+    subRows.map((r) => [r.id, { amount: Number(r.amount_cents), freq: String(r.frequency) }]),
+  );
+  const urgencyById = new Map(view.output.urgency.map((u) => [u.obligationId, u.score]));
+  const linkedContext = (r: ReminderRow): string | null => {
+    if (r.related_entity_type === 'subscription' && r.related_entity_id) {
+      const info = subInfo.get(r.related_entity_id);
+      if (info && info.amount > 0)
+        return `Completing this may free ${centsToDollars(monthlyCents(info.amount, info.freq))} per month.`;
+    }
+    if (r.related_entity_type === 'obligation' && r.related_entity_id) {
+      const score = urgencyById.get(r.related_entity_id);
+      if (score != null) return `Linked bill · urgency ${score}.`;
+    }
+    return null;
+  };
 
   const filter = (FILTERS.find((x) => x.key === f)?.key ?? 'all') as FilterKey;
 
@@ -234,6 +273,7 @@ export default async function RemindersPage({
                           timing={reminderTiming(r, today)}
                           dueSoon={isDueSoon(r, today)}
                           linkedLabel={linkedLabel(r)}
+                          linkedContext={linkedContext(r)}
                           relatedOptions={relatedOptions}
                         />
                       ))}

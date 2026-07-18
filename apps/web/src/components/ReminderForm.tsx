@@ -46,12 +46,14 @@ export function ReminderForm({
   reminder,
   title,
   relatedOptions = [],
+  contextBanner,
   children,
 }: {
   action: (fd: FormData) => Promise<void>;
   reminder?: ReminderRow;
   title: string;
   relatedOptions?: RelatedOption[];
+  contextBanner?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -90,6 +92,12 @@ export function ReminderForm({
           }}
           className="grid gap-3"
         >
+          {contextBanner && (
+            <div className="rounded-input bg-violet100 px-4 py-3 text-sm font-semibold text-violet600">
+              {contextBanner}
+            </div>
+          )}
+
           {/* Link + notifications ride along as hidden fields driven by state. */}
           <input type="hidden" name="related_entity_type" value={relType} />
           <input type="hidden" name="related_entity_id" value={relId} />

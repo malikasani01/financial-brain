@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { addDays, addMonths } from '@fb/engine';
 import { extractReminder, type ExtractedReminder, type ReminderCandidate } from '@fb/ai';
+import { recalculateFinancials } from '@fb/data';
 import { getSessionContext } from '@/lib/session';
 import { listOwn } from '@/lib/db';
 import { textOrNull } from '@/lib/money';
@@ -209,6 +210,26 @@ export async function deleteReminder(id: string): Promise<void> {
     .update({ archived_at: new Date().toISOString() })
     .eq('id', id)
     .eq('user_id', userId);
+  refresh();
+}
+
+/**
+ * Confirming a subscription cancellation from a linked reminder. Pausing is
+ * what removes a subscription from the forecast (see @fb/data normalize), so we
+ * pause it AND stamp canceled_at — future charges stop while the record is
+ * kept, never hard-deleted — then recalculate so the forecast, Reserved for
+ * Bills and Safe to Spend all update. This is the one reminder action that
+ * touches money, and only when the user explicitly confirms it.
+ */
+export async function cancelSubscriptionForReminder(subscriptionId: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  if (!subscriptionId) return;
+  await supabase
+    .from('subscriptions')
+    .update({ paused: true, canceled_at: new Date().toISOString() })
+    .eq('id', subscriptionId)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
   refresh();
 }
 

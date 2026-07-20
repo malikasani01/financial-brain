@@ -9,6 +9,7 @@
 
 import type { CashEvent, EngineInput, FinancialStage, LifeCostInput } from '@fb/types';
 import { expandOccurrences } from './recurrence.js';
+import { addDays, addMonths, daysInMonth } from './dateutil.js';
 
 /** The amount a life-cost category contributes, given the stage. */
 export function selectLifeCostAmount(lc: LifeCostInput, stage: FinancialStage): number {
@@ -25,11 +26,49 @@ export function selectLifeCostAmount(lc: LifeCostInput, stage: FinancialStage): 
   }
 }
 
+/**
+ * Budget-mode reservations: instead of per-occurrence amounts, reserve one
+ * lump per month at month-end — the REMAINING budget for the current month
+ * (budget − already-spent, so money already out of the account isn't reserved
+ * again) and the full budget for each later month in the horizon.
+ */
+function buildBudgetEvents(lc: LifeCostInput, today: string, horizonDays: number): CashEvent[] {
+  const budget = lc.monthlyBudgetCents ?? 0;
+  if (budget <= 0) return [];
+  const spent = lc.spentThisMonthCents ?? 0;
+  const end = addDays(today, horizonDays - 1);
+  const currentMonth = today.slice(0, 7);
+  const out: CashEvent[] = [];
+  let cursor = `${currentMonth}-01`;
+  while (cursor <= end) {
+    const year = Number(cursor.slice(0, 4));
+    const month = Number(cursor.slice(5, 7));
+    const monthEnd = `${cursor.slice(0, 7)}-${String(daysInMonth(year, month)).padStart(2, '0')}`;
+    const amount = cursor.slice(0, 7) === currentMonth ? Math.max(0, budget - spent) : budget;
+    if (amount > 0 && monthEnd >= today && monthEnd <= end) {
+      out.push({
+        date: monthEnd,
+        amountCents: -amount,
+        kind: 'LIFE_COST',
+        sourceId: lc.id,
+        confidence: 'CONFIRMED',
+        isEssential: lc.isEssential,
+      });
+    }
+    cursor = addMonths(cursor, 1);
+  }
+  return out;
+}
+
 /** Expand every life cost into dated outflow events for the given stage. */
 export function buildLifeCostEvents(input: EngineInput, stage: FinancialStage): CashEvent[] {
   const { clock, horizonDays } = input;
   const out: CashEvent[] = [];
   for (const lc of input.lifeCosts) {
+    if (lc.budgetMode) {
+      out.push(...buildBudgetEvents(lc, clock.today, horizonDays));
+      continue;
+    }
     const base = selectLifeCostAmount(lc, stage);
     // One-off "just this week" tweaks replace the planned amount on their date.
     const overrides = new Map((lc.overrides ?? []).map((o) => [o.date, o.amountCents]));

@@ -83,6 +83,9 @@ export interface LifeCostRow {
   planning_mode: 'MIN' | 'NORMAL' | 'CUSTOM' | 'STAGE_DEFAULT';
   custom_cents: number | null;
   is_essential: boolean;
+  /** Optional: budget columns exist only after migration 0007. */
+  budget_mode?: boolean | null;
+  monthly_budget_cents?: number | null;
   archived_at: string | null;
 }
 
@@ -116,6 +119,7 @@ export interface TransactionRow {
   id: string;
   amount_cents: number;
   direction: 'income' | 'expense' | 'transfer';
+  category?: string | null;
   txn_date: string;
   status: 'cleared' | 'uncleared' | 'pending' | 'scheduled';
   archived_at: string | null;

@@ -620,6 +620,8 @@ export async function setLifeCostPlanning(fd: FormData): Promise<void> {
     .update({
       planning_mode: mode,
       custom_cents: mode === 'CUSTOM' ? dollarsToCents(fd.get('custom')) : null,
+      // Choosing a fixed planned amount means this isn't a budget envelope.
+      budget_mode: false,
     })
     .eq('id', id)
     .eq('user_id', userId);
@@ -650,6 +652,30 @@ export async function setLifeCostWeekOverride(
       },
       { onConflict: 'life_cost_id,override_date' },
     );
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/plan');
+}
+
+/** Turn on monthly-budget mode for a flexible life cost and set its budget. */
+export async function setLifeCostBudget(lifeCostId: string, fd: FormData): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  await supabase
+    .from('life_cost_categories')
+    .update({ budget_mode: true, monthly_budget_cents: dollarsToCents(fd.get('budget')) })
+    .eq('id', lifeCostId)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/plan');
+}
+
+/** Turn off budget mode — the category returns to its fixed planned amount. */
+export async function disableLifeCostBudget(lifeCostId: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  await supabase
+    .from('life_cost_categories')
+    .update({ budget_mode: false })
+    .eq('id', lifeCostId)
+    .eq('user_id', userId);
   await recalculateFinancials(supabase, userId, clock);
   refresh('/plan');
 }

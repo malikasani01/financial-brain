@@ -121,6 +121,16 @@ export interface LifeCostInput {
    * planned amount for that date only — the recurring plan is unchanged.
    */
   overrides?: { date: ISODate; amountCents: Cents }[];
+  /**
+   * Budget mode: treat this flexible category as a monthly envelope instead of
+   * a fixed recurring amount. The forecast reserves the REMAINING budget for
+   * the current month (budget − already spent) and the full budget for each
+   * later month in the horizon — so money already spent isn't reserved twice.
+   */
+  budgetMode?: boolean;
+  monthlyBudgetCents?: Cents | null;
+  /** Cleared spending in this category so far this month (data-layer computed). */
+  spentThisMonthCents?: Cents;
 }
 
 /** A confirmed future funding event (paycheck, confirmed rent, confirmed refund). */

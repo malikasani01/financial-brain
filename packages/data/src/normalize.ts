@@ -215,6 +215,7 @@ function transactionEvents(
 function toLifeCostInput(
   r: LifeCostRow,
   overrides: { date: string; amountCents: number }[],
+  spentThisMonthCents: number,
 ): LifeCostInput {
   return {
     id: r.id,
@@ -227,6 +228,9 @@ function toLifeCostInput(
     isEssential: r.is_essential,
     nextDate: null,
     overrides,
+    budgetMode: r.budget_mode ?? false,
+    monthlyBudgetCents: r.monthly_budget_cents ?? null,
+    spentThisMonthCents,
   };
 }
 
@@ -311,14 +315,24 @@ export function normalizeToEngineInput(
     horizonDays,
     liquidCashCents,
     events,
-    lifeCosts: active(raw.lifeCosts).map((r) =>
-      toLifeCostInput(
-        r,
-        (raw.lifeCostOverrides ?? [])
-          .filter((o) => o.life_cost_id === r.id)
-          .map((o) => ({ date: o.override_date, amountCents: o.amount_cents })),
-      ),
-    ),
+    lifeCosts: active(raw.lifeCosts).map((r) => {
+      const overrides = (raw.lifeCostOverrides ?? [])
+        .filter((o) => o.life_cost_id === r.id)
+        .map((o) => ({ date: o.override_date, amountCents: o.amount_cents }));
+      // Cleared spending in this category this month (budget mode's "spent").
+      const month = clock.today.slice(0, 7);
+      const spent = (raw.transactions ?? [])
+        .filter(
+          (t) =>
+            !t.archived_at &&
+            t.status === 'cleared' &&
+            t.direction === 'expense' &&
+            t.category === r.category &&
+            t.txn_date.slice(0, 7) === month,
+        )
+        .reduce((sum, t) => sum + t.amount_cents, 0);
+      return toLifeCostInput(r, overrides, spent);
+    }),
     obligations: active(raw.obligations).map((r) => toObligationInput(r, raw.businesses)),
     goals: active(raw.goals).map(toGoalInput),
     fundingEvents,

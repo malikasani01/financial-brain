@@ -17,11 +17,14 @@ const SELECTS = {
   subscriptions: 'id,name,amount_cents,frequency,next_charge_date,purpose,paused,archived_at',
   lifeCosts:
     'id,category,frequency,minimum_cents,normal_cents,planning_mode,custom_cents,is_essential,archived_at',
+  // Fetched separately + resiliently: these columns exist only after migration
+  // 0007, so selecting them in the core query would break the whole load first.
+  lifeCostBudgets: 'id,budget_mode,monthly_budget_cents',
   goals:
     'id,name,category,target_cents,saved_cents,target_date,personal_priority,committed_per_paycheck_cents,archived_at',
   planned: 'id,amount_cents,planned_date,frequency,term_months,archived_at',
   businesses: 'id,monthly_revenue_cents',
-  transactions: 'id,amount_cents,direction,txn_date,status,archived_at',
+  transactions: 'id,amount_cents,direction,category,txn_date,status,archived_at',
   lifeCostOverrides: 'life_cost_id,override_date,amount_cents',
 } as const;
 
@@ -45,6 +48,7 @@ export async function fetchUserFinancialData(
     preferences,
     transactions,
     lifeCostOverrides,
+    lifeCostBudgets,
   ] = await Promise.all([
     q('accounts', SELECTS.accounts),
     q('cash_reservations', SELECTS.reservations),
@@ -66,6 +70,8 @@ export async function fetchUserFinancialData(
     q('transactions', SELECTS.transactions),
     // Resilient: absent until migration 0006 (one-off life-cost overrides).
     q('life_cost_overrides', SELECTS.lifeCostOverrides),
+    // Resilient: budget columns exist only after migration 0007.
+    q('life_cost_categories', SELECTS.lifeCostBudgets),
   ]);
 
   const err =
@@ -86,13 +92,26 @@ export async function fetchUserFinancialData(
   const rows = <K extends keyof RawFinancialData>(data: unknown): RawFinancialData[K] =>
     (data ?? []) as RawFinancialData[K];
 
+  // Merge the resiliently-fetched budget columns into the life-cost rows (empty
+  // before migration 0007, so budget mode is simply off).
+  const budgetById = new Map(
+    (lifeCostBudgets.error ? [] : (lifeCostBudgets.data ?? [])).map((b: unknown) => {
+      const r = b as { id: string; budget_mode: boolean | null; monthly_budget_cents: number | null };
+      return [r.id, r];
+    }),
+  );
+  const lifeCostRows = rows<'lifeCosts'>(lifeCosts.data).map((r) => {
+    const b = budgetById.get(r.id);
+    return { ...r, budget_mode: b?.budget_mode ?? false, monthly_budget_cents: b?.monthly_budget_cents ?? null };
+  });
+
   return {
     accounts: rows<'accounts'>(accounts.data),
     reservations: rows<'reservations'>(reservations.data),
     incomeSources: rows<'incomeSources'>(incomeSources.data),
     obligations: rows<'obligations'>(obligations.data),
     subscriptions: rows<'subscriptions'>(subscriptions.data),
-    lifeCosts: rows<'lifeCosts'>(lifeCosts.data),
+    lifeCosts: lifeCostRows,
     goals: rows<'goals'>(goals.data),
     plannedPurchases: rows<'plannedPurchases'>(plannedPurchases.data),
     businesses: rows<'businesses'>(businesses.data),

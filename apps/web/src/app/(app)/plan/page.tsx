@@ -19,6 +19,7 @@ import {
   markBillPaid,
   markSubscriptionPaid,
   saveToGoal,
+  setLifeCostBudget,
   setLifeCostPlanning,
   setLifeCostWeekOverride,
   updateBillAmountDate,
@@ -48,16 +49,26 @@ export default async function PlanPage() {
   // One concurrent wave: the engine view and every independent read fire
   // together. The real names below map each event's sourceId back to a human
   // name (events only carry ids).
-  const [{ input, output, clock }, subRows, lifeRows, goalRows, incomeRows, accountRows, txns] =
-    await Promise.all([
-      loadEngineView(),
-      listOwn('subscriptions', 'id,name'),
-      listOwn('life_cost_categories', 'id,category'),
-      listOwn('goals', 'id,name'),
-      listOwn('income_sources', 'id,name,net_amount_cents,frequency,confidence'),
-      listOwn('accounts', 'id,name'),
-      listTransactions({ limit: 500 }),
-    ]);
+  const [
+    { input, output, clock },
+    subRows,
+    lifeRows,
+    lifeBudgetRows,
+    goalRows,
+    incomeRows,
+    accountRows,
+    txns,
+  ] = await Promise.all([
+    loadEngineView(),
+    listOwn('subscriptions', 'id,name'),
+    listOwn('life_cost_categories', 'id,category'),
+    // Separate + resilient: budget columns exist only after migration 0007.
+    listOwn('life_cost_categories', 'id,budget_mode,monthly_budget_cents'),
+    listOwn('goals', 'id,name'),
+    listOwn('income_sources', 'id,name,net_amount_cents,frequency,confidence'),
+    listOwn('accounts', 'id,name'),
+    listTransactions({ limit: 500 }),
+  ]);
   const s = output.safeToSpend;
   const ledger = buildPaycheckLedger(input);
   const advice = advisePaycheckPeriods(input, ledger);
@@ -70,6 +81,30 @@ export default async function PlanPage() {
 
   const accounts = accountRows.map((a) => ({ id: a.id, name: String(a.name) }));
   const txnById = new Map(txns.map((t) => [t.id, t]));
+
+  // Per-life-cost budget info for the ledger's edit sheet: whether it's a
+  // budget envelope, its monthly budget, and cleared spending this month in
+  // that category (mirrors the engine's "spent" so the sheet matches).
+  const month = clock.today.slice(0, 7);
+  const spentByCategory = new Map<string, number>();
+  for (const t of txns) {
+    if (t.status !== 'cleared' || t.direction !== 'expense' || !t.category) continue;
+    if (t.txn_date.slice(0, 7) !== month) continue;
+    spentByCategory.set(t.category, (spentByCategory.get(t.category) ?? 0) + t.amount_cents);
+  }
+  const budgetRowById = new Map(lifeBudgetRows.map((r) => [r.id, r]));
+  const budgetByLifeCost = new Map<
+    string,
+    { budgetMode: boolean; monthlyBudgetCents: number | null; spentThisMonthCents: number }
+  >();
+  for (const r of lifeRows) {
+    const b = budgetRowById.get(r.id);
+    budgetByLifeCost.set(r.id, {
+      budgetMode: b?.budget_mode === true,
+      monthlyBudgetCents: b?.monthly_budget_cents == null ? null : Number(b.monthly_budget_cents),
+      spentThisMonthCents: spentByCategory.get(String(r.category)) ?? 0,
+    });
+  }
   // Recently-cleared manual transactions, newest first (shown green, editable).
   const recentlyCleared = txns
     .filter((t) => t.status === 'cleared' && t.txn_date >= addDays(clock.today, -14))
@@ -363,6 +398,7 @@ export default async function PlanPage() {
                       </EditBill>
                     );
                   } else if (l.kind === 'LIFE_COST') {
+                    const b = budgetByLifeCost.get(l.sourceId);
                     body = (
                       <EditLifeCost
                         id={l.sourceId}
@@ -373,6 +409,10 @@ export default async function PlanPage() {
                         weekAction={setLifeCostWeekOverride.bind(null, l.sourceId, l.date)}
                         resetWeekAction={clearLifeCostWeekOverride.bind(null, l.sourceId, l.date)}
                         deleteAction={archiveAndRecalc.bind(null, 'life_cost_categories', l.sourceId, '/plan')}
+                        budgetAction={setLifeCostBudget.bind(null, l.sourceId)}
+                        budgetMode={b?.budgetMode ?? false}
+                        monthlyBudgetCents={b?.monthlyBudgetCents ?? null}
+                        spentThisMonthCents={b?.spentThisMonthCents ?? 0}
                       >
                         {rowContent}
                       </EditLifeCost>

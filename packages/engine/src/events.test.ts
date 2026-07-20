@@ -52,3 +52,40 @@ describe('buildLifeCostEvents overrides', () => {
     expect(buildLifeCostEvents(input, 'STABLE')).toEqual([]);
   });
 });
+
+describe('buildLifeCostEvents budget mode', () => {
+  // TODAY is 2026-07-15, horizon 90 days -> covers Jul, Aug, Sep (ends ~Oct 12).
+  it('reserves the remaining budget this month and the full budget for later months', () => {
+    const input = makeInput({
+      lifeCosts: [lifeCost({ budgetMode: true, monthlyBudgetCents: 12000, spentThisMonthCents: 7000 })],
+    });
+    const out = buildLifeCostEvents(input, 'STABLE');
+    // July: 12000 - 7000 = 5000 at month-end; Aug & Sep: full 12000 at month-end.
+    expect(out.find((e) => e.date === '2026-07-31')?.amountCents).toBe(-5000);
+    expect(out.find((e) => e.date === '2026-08-31')?.amountCents).toBe(-12000);
+    expect(out.find((e) => e.date === '2026-09-30')?.amountCents).toBe(-12000);
+    expect(out.every((e) => e.kind === 'LIFE_COST')).toBe(true);
+  });
+
+  it('reserves nothing for the current month once the budget is spent', () => {
+    const input = makeInput({
+      lifeCosts: [lifeCost({ budgetMode: true, monthlyBudgetCents: 12000, spentThisMonthCents: 15000 })],
+    });
+    const out = buildLifeCostEvents(input, 'STABLE');
+    expect(out.some((e) => e.date === '2026-07-31')).toBe(false); // overspent -> 0
+    expect(out.find((e) => e.date === '2026-08-31')?.amountCents).toBe(-12000);
+  });
+
+  it('emits nothing when the monthly budget is zero or unset', () => {
+    const zero = makeInput({ lifeCosts: [lifeCost({ budgetMode: true, monthlyBudgetCents: 0 })] });
+    expect(buildLifeCostEvents(zero, 'STABLE')).toEqual([]);
+    const unset = makeInput({ lifeCosts: [lifeCost({ budgetMode: true, monthlyBudgetCents: null })] });
+    expect(buildLifeCostEvents(unset, 'STABLE')).toEqual([]);
+  });
+
+  it('defaults spent to zero when not provided', () => {
+    const input = makeInput({ lifeCosts: [lifeCost({ budgetMode: true, monthlyBudgetCents: 9000 })] });
+    const out = buildLifeCostEvents(input, 'STABLE');
+    expect(out.find((e) => e.date === '2026-07-31')?.amountCents).toBe(-9000);
+  });
+});

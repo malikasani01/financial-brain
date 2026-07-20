@@ -152,7 +152,50 @@ export default async function PlanPage() {
     <main className="mx-auto max-w-md px-6 py-10">
       <h1 className="text-2xl font-semibold text-forest">Paycheck plan</h1>
 
+      {/* Cash on hand — what's available right now, and the recent activity
+          behind it (cleared items green, income purple), all in one place. */}
       <Card className="mt-6">
+        <p className="text-sm uppercase tracking-wide text-muted">Cash on hand</p>
+        <p className="mt-1 text-3xl font-semibold text-forest">
+          {centsToDollars(s.currentLiquidCashCents)}
+        </p>
+        <p className="text-sm text-muted">available right now</p>
+
+        {recentlyCleared.length > 0 && (
+          <div className="mt-3 border-t border-sage/20 pt-2">
+            <p className="py-1 text-xs font-bold uppercase tracking-wide text-muted">Recent activity</p>
+            {recentlyCleared.map((t) => {
+              const isIncome = t.direction === 'income';
+              const tone = isIncome ? 'text-violet600' : 'text-pos';
+              return (
+                <div key={t.id} className="border-t border-sage/10 first:border-t-0">
+                  <EditTransaction
+                    txn={t}
+                    accounts={accounts}
+                    editAction={editTransaction.bind(null, t.id)}
+                    deleteAction={deleteTransaction.bind(null, t.id)}
+                  >
+                    <div className="flex items-baseline justify-between gap-3 py-2">
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="font-medium text-ink900">{t.name ?? 'Transaction'}</span>
+                        <span className={`ml-2 text-xs ${tone}`}>
+                          {isIncome ? 'income' : '✓ cleared'} · {t.txn_date.slice(5)}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 font-num ${tone}`}>
+                        {isIncome ? '+' : '-'}
+                        {centsToDollars(t.amount_cents)}
+                      </span>
+                    </div>
+                  </EditTransaction>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-4">
         <p className="text-sm uppercase tracking-wide text-muted">Next money in</p>
         {nextFunding ? (
           <>
@@ -194,35 +237,6 @@ export default async function PlanPage() {
             ? `This dips below your ${centsToWholeDollars(ledger.safetyBufferCents)} safety buffer.`
             : `You stay above your ${centsToWholeDollars(ledger.safetyBufferCents)} safety buffer throughout.`}
       </div>
-
-      {recentlyCleared.length > 0 && (
-        <div className="mt-4 overflow-hidden rounded-card border border-pos/30 bg-pos/5">
-          <p className="border-b border-pos/20 px-4 py-2 text-xs font-bold uppercase tracking-wide text-pos">
-            Recently cleared
-          </p>
-          {recentlyCleared.map((t) => (
-            <div key={t.id} className="border-t border-pos/15 px-4 first:border-t-0">
-              <EditTransaction
-                txn={t}
-                accounts={accounts}
-                editAction={editTransaction.bind(null, t.id)}
-                deleteAction={deleteTransaction.bind(null, t.id)}
-              >
-                <div className="flex items-baseline justify-between gap-3 py-2.5">
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="font-medium text-ink900">{t.name ?? 'Transaction'}</span>
-                    <span className="ml-2 text-xs text-pos">✓ cleared · {t.txn_date.slice(5)}</span>
-                  </span>
-                  <span className={`shrink-0 font-num ${t.direction === 'income' ? 'text-pos' : 'text-ink900'}`}>
-                    {t.direction === 'income' ? '+' : '-'}
-                    {centsToDollars(t.amount_cents)}
-                  </span>
-                </div>
-              </EditTransaction>
-            </div>
-          ))}
-        </div>
-      )}
 
       {ledger.periods.length === 0 && (
         <p className="mt-6 text-sm text-muted">

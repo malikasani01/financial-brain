@@ -115,6 +115,12 @@ export interface LifeCostInput {
   isEssential: boolean;
   /** First occurrence used to anchor recurrence; defaults to clock.today. */
   nextDate: ISODate | null;
+  /**
+   * One-off per-occurrence amount overrides ("just this week" tweaks), keyed by
+   * date. On a matching occurrence date, the override amount replaces the
+   * planned amount for that date only — the recurring plan is unchanged.
+   */
+  overrides?: { date: ISODate; amountCents: Cents }[];
 }
 
 /** A confirmed future funding event (paycheck, confirmed rent, confirmed refund). */

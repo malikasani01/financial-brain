@@ -30,10 +30,15 @@ export function buildLifeCostEvents(input: EngineInput, stage: FinancialStage): 
   const { clock, horizonDays } = input;
   const out: CashEvent[] = [];
   for (const lc of input.lifeCosts) {
-    const amount = selectLifeCostAmount(lc, stage);
-    if (amount <= 0) continue;
+    const base = selectLifeCostAmount(lc, stage);
+    // One-off "just this week" tweaks replace the planned amount on their date.
+    const overrides = new Map((lc.overrides ?? []).map((o) => [o.date, o.amountCents]));
+    // Nothing to emit at all: no planned amount and no overrides.
+    if (base <= 0 && overrides.size === 0) continue;
     const anchor = lc.nextDate ?? clock.today;
     for (const date of expandOccurrences(anchor, lc.frequency, clock.today, horizonDays)) {
+      const amount = overrides.has(date) ? overrides.get(date)! : base;
+      if (amount <= 0) continue;
       out.push({
         date,
         amountCents: -amount,

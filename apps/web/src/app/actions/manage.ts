@@ -554,3 +554,43 @@ export async function setLifeCostPlanning(fd: FormData): Promise<void> {
   await recalculateFinancials(supabase, userId, clock);
   refresh('/life-costs');
 }
+
+/**
+ * One-off "just this week" tweak: override a flexible life cost's amount for a
+ * single occurrence date without changing its recurring plan. Upserts the
+ * override, then recalculates. Best-effort before migration 0006 (a missing
+ * table returns an error, which we ignore so the app keeps working).
+ */
+export async function setLifeCostWeekOverride(
+  lifeCostId: string,
+  date: string,
+  fd: FormData,
+): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  await supabase
+    .from('life_cost_overrides')
+    .upsert(
+      {
+        user_id: userId,
+        life_cost_id: lifeCostId,
+        override_date: date,
+        amount_cents: dollarsToCents(fd.get('amount')),
+      },
+      { onConflict: 'life_cost_id,override_date' },
+    );
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/plan');
+}
+
+/** Remove a one-off override so that occurrence returns to the usual plan. */
+export async function clearLifeCostWeekOverride(lifeCostId: string, date: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  await supabase
+    .from('life_cost_overrides')
+    .delete()
+    .eq('user_id', userId)
+    .eq('life_cost_id', lifeCostId)
+    .eq('override_date', date);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/plan');
+}

@@ -212,7 +212,10 @@ function transactionEvents(
   return out;
 }
 
-function toLifeCostInput(r: LifeCostRow): LifeCostInput {
+function toLifeCostInput(
+  r: LifeCostRow,
+  overrides: { date: string; amountCents: number }[],
+): LifeCostInput {
   return {
     id: r.id,
     category: r.category,
@@ -223,6 +226,7 @@ function toLifeCostInput(r: LifeCostRow): LifeCostInput {
     customCents: r.custom_cents,
     isEssential: r.is_essential,
     nextDate: null,
+    overrides,
   };
 }
 
@@ -307,7 +311,14 @@ export function normalizeToEngineInput(
     horizonDays,
     liquidCashCents,
     events,
-    lifeCosts: active(raw.lifeCosts).map(toLifeCostInput),
+    lifeCosts: active(raw.lifeCosts).map((r) =>
+      toLifeCostInput(
+        r,
+        (raw.lifeCostOverrides ?? [])
+          .filter((o) => o.life_cost_id === r.id)
+          .map((o) => ({ date: o.override_date, amountCents: o.amount_cents })),
+      ),
+    ),
     obligations: active(raw.obligations).map((r) => toObligationInput(r, raw.businesses)),
     goals: active(raw.goals).map(toGoalInput),
     fundingEvents,

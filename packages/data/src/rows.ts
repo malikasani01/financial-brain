@@ -121,6 +121,12 @@ export interface TransactionRow {
   archived_at: string | null;
 }
 
+export interface LifeCostOverrideRow {
+  life_cost_id: string;
+  override_date: string;
+  amount_cents: number;
+}
+
 export interface UserPreferencesRow {
   safety_buffer_override_cents: number | null;
 }
@@ -139,4 +145,6 @@ export interface RawFinancialData {
   preferences: UserPreferencesRow | null;
   /** Optional: absent until migration 0004 is applied (older callers omit it). */
   transactions?: TransactionRow[];
+  /** Optional: absent until migration 0006 is applied. One-off life-cost tweaks. */
+  lifeCostOverrides?: LifeCostOverrideRow[];
 }

@@ -5,7 +5,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { RawFinancialData, TransactionRow } from './rows.js';
+import type { LifeCostOverrideRow, RawFinancialData, TransactionRow } from './rows.js';
 
 /** Columns we select per table (kept explicit so the row types stay honest). */
 const SELECTS = {
@@ -22,6 +22,7 @@ const SELECTS = {
   planned: 'id,amount_cents,planned_date,frequency,term_months,archived_at',
   businesses: 'id,monthly_revenue_cents',
   transactions: 'id,amount_cents,direction,txn_date,status,archived_at',
+  lifeCostOverrides: 'life_cost_id,override_date,amount_cents',
 } as const;
 
 export async function fetchUserFinancialData(
@@ -43,6 +44,7 @@ export async function fetchUserFinancialData(
     businesses,
     preferences,
     transactions,
+    lifeCostOverrides,
   ] = await Promise.all([
     q('accounts', SELECTS.accounts),
     q('cash_reservations', SELECTS.reservations),
@@ -62,6 +64,8 @@ export async function fetchUserFinancialData(
     // rather than throwing, and we deliberately do NOT fold it into `err`, so
     // the whole engine view keeps working before transactions exist.
     q('transactions', SELECTS.transactions),
+    // Resilient: absent until migration 0006 (one-off life-cost overrides).
+    q('life_cost_overrides', SELECTS.lifeCostOverrides),
   ]);
 
   const err =
@@ -95,5 +99,8 @@ export async function fetchUserFinancialData(
     preferences: (preferences.data ?? null) as unknown as RawFinancialData['preferences'],
     // If the table isn't there yet (error) or is empty, fall back to [].
     transactions: (transactions.error ? [] : (transactions.data ?? [])) as unknown as TransactionRow[],
+    lifeCostOverrides: (lifeCostOverrides.error
+      ? []
+      : (lifeCostOverrides.data ?? [])) as unknown as LifeCostOverrideRow[],
   };
 }

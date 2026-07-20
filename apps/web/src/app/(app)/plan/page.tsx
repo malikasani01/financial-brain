@@ -12,12 +12,14 @@ import { EditLifeCost } from '@/components/EditLifeCost';
 import { LogSaving } from '@/components/LogSaving';
 import {
   archiveAndRecalc,
+  clearLifeCostWeekOverride,
   deleteTransaction,
   editTransaction,
   markBillPaid,
   markSubscriptionPaid,
   saveToGoal,
   setLifeCostPlanning,
+  setLifeCostWeekOverride,
   updateBillAmountDate,
   updateSubscriptionAmountDate,
 } from '@/app/actions/manage';
@@ -350,7 +352,10 @@ export default async function PlanPage() {
                         id={l.sourceId}
                         name={name}
                         amountCents={Math.abs(l.amountCents)}
-                        saveAction={setLifeCostPlanning}
+                        date={l.date}
+                        planAction={setLifeCostPlanning}
+                        weekAction={setLifeCostWeekOverride.bind(null, l.sourceId, l.date)}
+                        resetWeekAction={clearLifeCostWeekOverride.bind(null, l.sourceId, l.date)}
                         deleteAction={archiveAndRecalc.bind(null, 'life_cost_categories', l.sourceId, '/plan')}
                       >
                         {rowContent}

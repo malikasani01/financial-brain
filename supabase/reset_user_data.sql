@@ -45,6 +45,10 @@ begin
   if to_regclass('public.reminders') is not null then
     delete from public.reminders where user_id = uid;
   end if;
+  -- life_cost_overrides only exists once migration 0006 has been applied.
+  if to_regclass('public.life_cost_overrides') is not null then
+    delete from public.life_cost_overrides where user_id = uid;
+  end if;
   delete from public.obligation_payments       where user_id = uid;
   delete from public.goal_contributions        where user_id = uid;
   delete from public.business_scenarios        where user_id = uid;

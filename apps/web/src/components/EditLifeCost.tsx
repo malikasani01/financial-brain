@@ -8,6 +8,12 @@ const field =
   'mt-1 w-full rounded-input border border-line bg-white px-4 py-3 outline-none focus:border-violet500';
 const label = 'block text-sm font-semibold text-ink600';
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function shortDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${MONTHS[(m ?? 1) - 1]} ${d}`;
+}
+
 function Btn({ children, tone = 'violet' }: { children: string; tone?: 'violet' | 'neg' }) {
   const { pending } = useFormStatus();
   return (
@@ -25,26 +31,40 @@ function Btn({ children, tone = 'violet' }: { children: string; tone?: 'violet' 
 
 /**
  * A flexible life-cost ledger row (Groceries, Gas, Eating out, …) that opens a
- * sheet to adjust its planned amount up or down, or remove it entirely.
- * Adjusting sets a CUSTOM planning amount for the category, so the change flows
- * through the whole forecast. `children` is the row content shown inline.
+ * sheet to change its amount — either just this one week (a one-off override
+ * that leaves the ongoing plan untouched) or every time (the recurring plan) —
+ * reset a one-off back to the plan, or remove the cost entirely.
  */
 export function EditLifeCost({
   id,
   name,
   amountCents,
-  saveAction,
+  date,
+  planAction,
+  weekAction,
+  resetWeekAction,
   deleteAction,
   children,
 }: {
   id: string;
   name: string;
   amountCents: number;
-  saveAction: (fd: FormData) => Promise<void>;
+  date: string;
+  planAction: (fd: FormData) => Promise<void>;
+  weekAction: (fd: FormData) => Promise<void>;
+  resetWeekAction: () => Promise<void>;
   deleteAction: () => Promise<void>;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState((amountCents / 100).toString());
+  const [scope, setScope] = useState<'week' | 'plan'>('week');
+
+  const close = () => {
+    setOpen(false);
+    setAmount((amountCents / 100).toString());
+    setScope('week');
+  };
 
   return (
     <>
@@ -52,45 +72,88 @@ export function EditLifeCost({
         {children}
       </button>
 
-      <BottomSheet open={open} onClose={() => setOpen(false)} title={name}>
+      <BottomSheet open={open} onClose={close} title={name}>
         <form
           action={async (fd) => {
-            await saveAction(fd);
-            setOpen(false);
+            await (scope === 'week' ? weekAction(fd) : planAction(fd));
+            close();
           }}
           className="grid gap-3"
         >
+          {/* Fields for the recurring-plan path (setLifeCostPlanning). */}
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="planning_mode" value="CUSTOM" />
+          <input type="hidden" name="custom" value={amount} />
+
           <p className="text-sm text-ink600">
-            This is a flexible cost — set what you actually plan to spend on {name.toLowerCase()}.
-            It updates your forecast for this category.
+            {name} is flexible — set what you plan to spend.
           </p>
+
           <label className={label}>
-            Planned amount
+            Amount
             <input
-              name="custom"
+              name="amount"
               inputMode="decimal"
               required
-              defaultValue={(amountCents / 100).toString()}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
               className={field}
             />
           </label>
-          <Btn>Save amount</Btn>
+
+          <div className="flex gap-1 rounded-full bg-line/60 p-1">
+            <button
+              type="button"
+              onClick={() => setScope('week')}
+              className={`flex-1 rounded-full py-2 text-sm font-bold ${
+                scope === 'week' ? 'bg-white text-violet600 shadow-card' : 'text-ink600'
+              }`}
+            >
+              Just this week ({shortDate(date)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope('plan')}
+              className={`flex-1 rounded-full py-2 text-sm font-bold ${
+                scope === 'plan' ? 'bg-white text-violet600 shadow-card' : 'text-ink600'
+              }`}
+            >
+              Every time
+            </button>
+          </div>
+          <p className="text-xs text-ink600">
+            {scope === 'week'
+              ? 'A one-off tweak for this week only — your ongoing plan stays the same.'
+              : 'Changes the planned amount for this category across your whole forecast.'}
+          </p>
+
+          <Btn>{scope === 'week' ? `Save for ${shortDate(date)}` : 'Save the plan'}</Btn>
+        </form>
+
+        <form
+          action={async () => {
+            await resetWeekAction();
+            close();
+          }}
+          className="mt-3"
+        >
+          <button type="submit" className="w-full py-2 text-center text-sm font-bold text-violet600">
+            Reset this week to the usual plan
+          </button>
         </form>
 
         <form
           action={async () => {
             await deleteAction();
-            setOpen(false);
+            close();
           }}
-          className="mt-4 grid gap-3 border-t border-line pt-4"
+          className="mt-2 grid gap-2 border-t border-line pt-4"
         >
           <p className="text-sm text-ink600">
-            Don&apos;t want to track {name.toLowerCase()} here? Remove it — you can always add it
+            Don&apos;t want to track {name.toLowerCase()} here at all? Remove it — you can add it
             back from Life costs.
           </p>
-          <Btn tone="neg">Remove this cost</Btn>
+          <Btn tone="neg">Remove this cost entirely</Btn>
         </form>
       </BottomSheet>
     </>

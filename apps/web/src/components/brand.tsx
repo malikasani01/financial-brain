@@ -6,14 +6,14 @@ import { centsToDollars } from '@/lib/money';
  * (pos/neg/warn/info) are reserved for money meaning only.
  */
 
-/** The brand mark: violet rounded square, ink cutout, small positive-green dot. */
+/** The brand mark: violet rounded tile with an off-white circle and a small
+ *  positive-green circle (matches the app icon). */
 export function Logo({ size = 32, withWordmark = false }: { size?: number; withWordmark?: boolean }) {
   const mark = (
     <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden>
-      <rect width="100" height="100" rx="24" fill="#14131A" />
-      <rect x="32" y="32" width="36" height="36" rx="11" fill="#6C4CFF" />
-      <circle cx="44" cy="44" r="12" fill="#14131A" />
-      <circle cx="65" cy="65" r="7" fill="#1FAE6B" />
+      <rect width="100" height="100" rx="24" fill="#6C4CFF" />
+      <circle cx="37.9" cy="39.8" r="21" fill="#F7F5EF" />
+      <circle cx="79.2" cy="76.7" r="12.5" fill="#1FAE6B" />
     </svg>
   );
   if (!withWordmark) return mark;

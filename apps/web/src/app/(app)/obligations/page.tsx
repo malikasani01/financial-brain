@@ -3,6 +3,7 @@ import { listOwn } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
 import { ObligationFields, EditForm } from '@/components/entity-fields';
+import { SaveButton } from '@/components/SaveButton';
 import { addObligationAndRecalc, updateObligation } from '@/app/actions/financial';
 import {
   archiveAndRecalc,
@@ -40,7 +41,7 @@ export default async function ObligationsPage() {
           </p>
           <form action={addObligationAndRecalc} className="mt-3 grid gap-3">
             <ObligationFields />
-            <PrimaryButton>Add obligation</PrimaryButton>
+            <SaveButton label="Save" />
           </form>
         </details>
       </Card>

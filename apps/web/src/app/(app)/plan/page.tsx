@@ -8,13 +8,16 @@ import { centsToDollars, centsToWholeDollars } from '@/lib/money';
 import { Card } from '@/components/ui';
 import { EditTransaction } from '@/components/EditTransaction';
 import { EditBill } from '@/components/EditBill';
+import { EditLifeCost } from '@/components/EditLifeCost';
 import { LogSaving } from '@/components/LogSaving';
 import {
+  archiveAndRecalc,
   deleteTransaction,
   editTransaction,
   markBillPaid,
   markSubscriptionPaid,
   saveToGoal,
+  setLifeCostPlanning,
   updateBillAmountDate,
   updateSubscriptionAmountDate,
 } from '@/app/actions/manage';
@@ -270,7 +273,8 @@ export default async function PlanPage() {
                   const overdue = overdueIds.has(l.sourceId);
                   const txn = l.kind === 'MANUAL' ? txnById.get(l.sourceId) : undefined;
                   const name = nameById.get(l.sourceId) ?? KIND_LABEL[l.kind];
-                  const editable = txn || l.kind === 'OBLIGATION' || l.kind === 'SUBSCRIPTION';
+                  const editable =
+                    txn || l.kind === 'OBLIGATION' || l.kind === 'SUBSCRIPTION' || l.kind === 'LIFE_COST';
                   const rowContent = (
                     <>
                       {/* Line 1: what it is + how much */}
@@ -339,6 +343,18 @@ export default async function PlanPage() {
                       >
                         {rowContent}
                       </EditBill>
+                    );
+                  } else if (l.kind === 'LIFE_COST') {
+                    body = (
+                      <EditLifeCost
+                        id={l.sourceId}
+                        name={name}
+                        amountCents={Math.abs(l.amountCents)}
+                        saveAction={setLifeCostPlanning}
+                        deleteAction={archiveAndRecalc.bind(null, 'life_cost_categories', l.sourceId, '/plan')}
+                      >
+                        {rowContent}
+                      </EditLifeCost>
                     );
                   }
 

@@ -58,12 +58,12 @@ export function EditLifeCost({
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState((amountCents / 100).toString());
-  const [scope, setScope] = useState<'week' | 'plan'>('week');
+  const [scope, setScope] = useState<'week' | 'plan'>('plan');
 
   const close = () => {
     setOpen(false);
     setAmount((amountCents / 100).toString());
-    setScope('week');
+    setScope('plan');
   };
 
   return (

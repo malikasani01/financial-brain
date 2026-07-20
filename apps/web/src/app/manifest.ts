@@ -10,8 +10,9 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     categories: ['finance', 'productivity'],
     display: 'standalone',
-    // Ink splash to match the icon tile; violet is the brand toolbar accent.
-    background_color: '#14131A',
+    // Violet splash to match the new icon (violet field with the brand marks);
+    // violet is also the toolbar accent.
+    background_color: '#6C4CFF',
     theme_color: '#6C4CFF',
     icons: [
       // Scalable source for any browser that supports it.

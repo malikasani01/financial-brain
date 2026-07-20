@@ -322,6 +322,7 @@ export default async function PlanPage() {
                         accounts={accounts}
                         editAction={updateBillAmountDate.bind(null, l.sourceId)}
                         payAction={markBillPaid.bind(null, l.sourceId)}
+                        allowPartial
                       >
                         {rowContent}
                       </EditBill>

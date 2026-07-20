@@ -3,7 +3,7 @@ import { listOwn } from '@/lib/db';
 import { centsToDollars } from '@/lib/money';
 import { Card, Field, PrimaryButton, SelectField } from '@/components/ui';
 import { ObligationFields, EditForm } from '@/components/entity-fields';
-import { updateObligation } from '@/app/actions/financial';
+import { addObligationAndRecalc, updateObligation } from '@/app/actions/financial';
 import {
   archiveAndRecalc,
   markObligationResolved,
@@ -28,6 +28,22 @@ export default async function ObligationsPage() {
         Back
       </Link>
       <h1 className="mt-4 text-2xl font-semibold text-forest">Obligations</h1>
+
+      {/* Add a new obligation */}
+      <Card className="mt-6">
+        <details>
+          <summary className="cursor-pointer font-semibold text-forest">
+            + Add an obligation
+          </summary>
+          <p className="mt-2 text-sm text-muted">
+            A bill you owe — name it, pick a category, set the amount due and when it&apos;s due.
+          </p>
+          <form action={addObligationAndRecalc} className="mt-3 grid gap-3">
+            <ObligationFields />
+            <PrimaryButton>Add obligation</PrimaryButton>
+          </form>
+        </details>
+      </Card>
 
       <ul className="mt-6 space-y-3">
         {rows.map((r) => {
@@ -102,8 +118,8 @@ export default async function ObligationsPage() {
       </ul>
 
       <p className="mt-6 text-sm text-muted">
-        Add new obligations during setup or from the onboarding flow. This screen manages the ones
-        you already have.
+        Use “+ Add an obligation” above to add a new bill anytime. Editing or removing here updates
+        your forecast right away.
       </p>
     </main>
   );

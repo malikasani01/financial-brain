@@ -432,9 +432,15 @@ export async function updateBillAmountDate(id: string, fd: FormData): Promise<vo
 }
 
 /**
- * Mark a bill occurrence paid: lower the account, log the payment, and move the
- * bill past this occurrence — advance a recurring bill to its next date, or
- * resolve a one-time/overdue one — so the forecast never counts it twice.
+ * Mark a bill occurrence paid from the ledger. Lowers the account by the amount
+ * actually paid and logs it. A FULL payment moves the bill past this occurrence
+ * (advance a recurring bill, or resolve a one-time/overdue one) so the forecast
+ * never counts it twice. A PARTIAL payment lowers the balance by what was paid
+ * and records it, but leaves the bill in place so the remainder is still
+ * tracked — the user can finish paying it later.
+ *
+ * Form fields: `amount` (defaults to the full/cure amount if omitted) and
+ * `resolved` ('YES' full | 'PARTIAL'). Absent `resolved` defaults to full.
  */
 export async function markBillPaid(id: string, fd: FormData): Promise<void> {
   const { supabase, userId, clock } = await getSessionContext();
@@ -457,9 +463,12 @@ export async function markBillPaid(id: string, fd: FormData): Promise<void> {
   if (!ob) return;
 
   const overdue = ob.status === 'OVERDUE' || ob.status === 'SEVERELY_OVERDUE';
-  const amount = overdue
+  const fullAmount = overdue
     ? (ob.minimum_required_cents ?? ob.amount_due_cents ?? 0)
     : (ob.amount_due_cents ?? ob.minimum_required_cents ?? 0);
+  const entered = dollarsToCentsOrNull(fd.get('amount'));
+  const amount = entered != null && entered > 0 ? entered : fullAmount;
+  const partial = String(fd.get('resolved') ?? 'YES') === 'PARTIAL';
   const accountId = String(fd.get('account_id') ?? '');
 
   if (accountId) await adjustAccountBalance(supabase, userId, accountId, -amount);
@@ -469,18 +478,22 @@ export async function markBillPaid(id: string, fd: FormData): Promise<void> {
     amount_cents: amount,
     payment_date: clock.today,
     account_id: accountId || null,
-    resolved_immediate: 'YES',
+    resolved_immediate: partial ? 'PARTIAL' : 'YES',
   });
 
-  if (ob.frequency === 'ONE_TIME' || overdue) {
-    await supabase.from('obligations').update({ resolved: true, status: 'CURRENT' }).eq('id', id).eq('user_id', userId);
-  } else {
-    const anchor = ob.next_expected_payment_date ?? ob.due_date ?? clock.today;
-    await supabase
-      .from('obligations')
-      .update({ next_expected_payment_date: nextOccurrence(anchor, ob.frequency) })
-      .eq('id', id)
-      .eq('user_id', userId);
+  // Only a full payment moves the bill past this occurrence; a partial payment
+  // leaves it due so the remaining balance is still expected.
+  if (!partial) {
+    if (ob.frequency === 'ONE_TIME' || overdue) {
+      await supabase.from('obligations').update({ resolved: true, status: 'CURRENT' }).eq('id', id).eq('user_id', userId);
+    } else {
+      const anchor = ob.next_expected_payment_date ?? ob.due_date ?? clock.today;
+      await supabase
+        .from('obligations')
+        .update({ next_expected_payment_date: nextOccurrence(anchor, ob.frequency) })
+        .eq('id', id)
+        .eq('user_id', userId);
+    }
   }
   await recalculateFinancials(supabase, userId, clock);
   refresh('/home');

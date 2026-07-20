@@ -40,6 +40,7 @@ export function EditBill({
   accounts,
   editAction,
   payAction,
+  allowPartial = false,
   children,
 }: {
   name: string;
@@ -48,9 +49,11 @@ export function EditBill({
   accounts: Account[];
   editAction: (fd: FormData) => Promise<void>;
   payAction: (fd: FormData) => Promise<void>;
+  allowPartial?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(true);
 
   const AccountField = () =>
     accounts.length > 1 ? (
@@ -103,16 +106,59 @@ export function EditBill({
         <form
           action={async (fd) => {
             await payAction(fd);
+            setFull(true);
             setOpen(false);
           }}
           className="mt-4 grid gap-3 border-t border-line pt-4"
         >
           <p className="text-sm text-ink600">
-            Paid it already? Marking it cleared lowers your balance and moves this bill to its next
-            occurrence.
+            Paid it already? Marking it cleared lowers your balance
+            {allowPartial ? '' : ' and moves this bill to its next occurrence'}.
           </p>
+
+          {allowPartial && (
+            <>
+              <input type="hidden" name="resolved" value={full ? 'YES' : 'PARTIAL'} />
+              <label className={label}>
+                Amount paid
+                <input
+                  name="amount"
+                  inputMode="decimal"
+                  defaultValue={(amountCents / 100).toString()}
+                  className={field}
+                />
+              </label>
+              <div className="flex gap-1 rounded-full bg-line/60 p-1">
+                <button
+                  type="button"
+                  onClick={() => setFull(true)}
+                  className={`flex-1 rounded-full py-2 text-sm font-bold ${
+                    full ? 'bg-white text-violet600 shadow-card' : 'text-ink600'
+                  }`}
+                >
+                  Paid in full
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFull(false)}
+                  className={`flex-1 rounded-full py-2 text-sm font-bold ${
+                    !full ? 'bg-white text-violet600 shadow-card' : 'text-ink600'
+                  }`}
+                >
+                  Partial payment
+                </button>
+              </div>
+              {!full && (
+                <p className="text-xs text-ink600">
+                  A partial payment lowers your balance by what you paid and keeps this bill on the
+                  ledger so you remember the rest.
+                </p>
+              )}
+            </>
+          )}
+
           <AccountField />
-          <Btn tone="pos">Mark paid / cleared</Btn>
+          <Btn tone="pos">{allowPartial && !full ? 'Record partial payment' : 'Mark paid / cleared'}</Btn>
         </form>
       </BottomSheet>
     </>

@@ -105,6 +105,16 @@ export async function addObligation(fd: FormData): Promise<void> {
   });
 }
 
+/**
+ * Add an obligation from the management screen (not onboarding), then
+ * recalculate so the new bill shows up in the forecast / Safe to Spend right
+ * away. Onboarding adds recalc once at the end; a standalone add needs it now.
+ */
+export async function addObligationAndRecalc(fd: FormData): Promise<void> {
+  await addObligation(fd);
+  await recalcNow();
+}
+
 export async function addLifeCost(fd: FormData): Promise<void> {
   await insert('life_cost_categories', {
     category: fd.get('category') ?? 'Groceries',

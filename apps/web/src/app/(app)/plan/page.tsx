@@ -9,6 +9,7 @@ import { Card } from '@/components/ui';
 import { EditTransaction } from '@/components/EditTransaction';
 import { EditBill } from '@/components/EditBill';
 import { EditLifeCost } from '@/components/EditLifeCost';
+import { IncomeReceivedButton } from '@/components/IncomeReceivedButton';
 import { LogSaving } from '@/components/LogSaving';
 import {
   archiveAndRecalc,
@@ -241,11 +242,12 @@ export default async function PlanPage() {
                     {p.incomeDate ? incomeLabel(p) : 'Cash on hand'}
                   </p>
                   {p.incomeDate && <p className="text-xs text-muted">{p.incomeDate}</p>}
+                  {p.incomeDate && <IncomeReceivedButton sourceIds={p.incomeSourceIds} />}
                 </div>
                 <div className="text-right">
                   {p.incomeDate && (
                     <p className="text-sm text-forest">
-                      +{centsToDollars(p.incomeAmountCents)} received
+                      +{centsToDollars(p.incomeAmountCents)} expected
                     </p>
                   )}
                   <p className="mt-0.5 text-xs uppercase tracking-wide text-muted">Available</p>

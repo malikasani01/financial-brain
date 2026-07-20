@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { addDays, addMonths } from '@fb/engine';
+import type { Frequency, ISODate } from '@fb/types';
+import { addDays, addMonths, expandOccurrences } from '@fb/engine';
 import { recalculateFinancials } from '@fb/data';
 import { getSessionContext } from '@/lib/session';
 import { dollarsToCents, dollarsToCentsOrNull, textOrNull } from '@/lib/money';
@@ -67,6 +68,48 @@ export async function archiveAndRecalc(table: string, id: string, path: string):
   refresh(path);
 }
 
+/**
+ * Advance an income source past its current occurrence so the forecast stops
+ * projecting money that is already in the bank. Received income raises the
+ * balance; if we didn't also move the source's next date forward, the same
+ * paycheck would be counted twice (once in the balance, once as upcoming). Only
+ * advances an occurrence that is due now or past — a future occurrence received
+ * early is left alone. Recurring sources roll to the next date; a one-time
+ * source is cleared (null) so it never projects again.
+ */
+/**
+ * The next scheduled occurrence strictly after `after`, using the engine's own
+ * recurrence expansion so fixed-day schedules (e.g. SEMIMONTHLY on the 5th &
+ * 20th) keep their exact days instead of drifting. Null for one-time.
+ */
+function nextScheduledAfter(anchor: string, frequency: string, after: string): string | null {
+  if (frequency === 'ONE_TIME') return null;
+  const dates = expandOccurrences(anchor as ISODate, frequency as Frequency, after as ISODate, 400);
+  return dates.find((d) => d > after) ?? null;
+}
+
+async function advanceIncomeSource(
+  supabase: Supa,
+  userId: string,
+  sourceId: string,
+  today: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from('income_sources')
+    .select('frequency,next_expected_date')
+    .eq('id', sourceId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const src = data as { frequency: string; next_expected_date: string | null } | null;
+  if (!src || !src.next_expected_date || src.next_expected_date > today) return;
+  const next = nextScheduledAfter(src.next_expected_date, src.frequency, src.next_expected_date);
+  await supabase
+    .from('income_sources')
+    .update({ next_expected_date: next })
+    .eq('id', sourceId)
+    .eq('user_id', userId);
+}
+
 /** Record actual received income: creates a cash event and raises the account balance (§35). */
 export async function markIncomeReceived(fd: FormData): Promise<void> {
   const { supabase, userId, clock } = await getSessionContext();
@@ -82,8 +125,37 @@ export async function markIncomeReceived(fd: FormData): Promise<void> {
     deposited_account_id: accountId || null,
   });
   await adjustAccountBalance(supabase, userId, accountId, amountCents);
+  // Move the schedule forward so this paycheck isn't also projected as upcoming.
+  if (sourceId) await advanceIncomeSource(supabase, userId, sourceId, clock.today);
   await recalculateFinancials(supabase, userId, clock);
   refresh('/income');
+}
+
+/**
+ * "I already have this paycheck in my balance — stop projecting it." Advances
+ * the income source past this occurrence WITHOUT changing the balance (the
+ * money is already there). Fixes a paycheck that was received/entered manually
+ * so it isn't double-counted in the ledger.
+ */
+export async function markIncomeAlreadyReceived(sourceId: string): Promise<void> {
+  const { supabase, userId, clock } = await getSessionContext();
+  const { data } = await supabase
+    .from('income_sources')
+    .select('frequency,next_expected_date')
+    .eq('id', sourceId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const src = data as { frequency: string; next_expected_date: string | null } | null;
+  if (!src) return;
+  const anchor = src.next_expected_date ?? clock.today;
+  const next = nextScheduledAfter(anchor, src.frequency, anchor);
+  await supabase
+    .from('income_sources')
+    .update({ next_expected_date: next })
+    .eq('id', sourceId)
+    .eq('user_id', userId);
+  await recalculateFinancials(supabase, userId, clock);
+  refresh('/plan');
 }
 
 /** Record an obligation payment: logs it, lowers the account balance, updates status (§36). */

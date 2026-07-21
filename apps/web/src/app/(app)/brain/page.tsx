@@ -1,7 +1,6 @@
 import { getSessionContext } from '@/lib/session';
 import { AskBrainForm } from '@/components/AskBrainForm';
 import { askBrain } from '@/app/actions/brain';
-import { signOut } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,10 +62,6 @@ export default async function BrainPage() {
       <div className="mt-6">
         <AskBrainForm action={askBrain} />
       </div>
-
-      <form action={signOut} className="mt-6">
-        <button className="text-xs text-muted underline underline-offset-4">Sign out</button>
-      </form>
     </main>
   );
 }

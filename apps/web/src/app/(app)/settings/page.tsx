@@ -5,7 +5,6 @@ import { dollarsInput } from '@/lib/db';
 import { Card } from '@/components/ui';
 import { SaveButton } from '@/components/SaveButton';
 import { setSafetyBuffer } from '@/app/actions/financial';
-import { signOut } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,10 +67,6 @@ export default async function SettingsPage() {
           </li>
         ))}
       </ul>
-
-      <form action={signOut} className="mt-8">
-        <button className="text-sm font-bold text-violet600">Sign out</button>
-      </form>
     </main>
   );
 }

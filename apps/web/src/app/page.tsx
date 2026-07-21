@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
-// Login has been removed — everyone lands straight on the dashboard. The
-// (app) layout still redirects to onboarding until setup is complete.
+// The middleware sends unauthenticated users to /sign-in; authenticated users
+// land on the dashboard.
 export default function IndexPage() {
   redirect('/home');
 }
